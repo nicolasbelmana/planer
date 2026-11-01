@@ -1,0 +1,94 @@
+{% extends "planner/base.html" %}
+{% block title %}OT-{{ order.pk }} · Maintenance Planner{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-start mb-3">
+  <div>
+    <a href="{% url 'dashboard' %}" class="text-decoration-none">&larr; Volver a órdenes</a>
+    <h1 class="h3 mt-2">OT-{{ order.pk }} · {{ order.title }}</h1>
+  </div>
+  <div>
+    <span class="badge text-bg-secondary fs-6">{{ order.get_status_display }}</span>
+    {% if order.is_overdue %}<span class="badge text-bg-danger fs-6">Vencida</span>{% endif %}
+  </div>
+</div>
+<div class="row g-3">
+  <div class="col-lg-7">
+    <section class="card shadow-sm mb-3">
+      <div class="card-body">
+        <h2 class="h5">Detalles</h2>
+        <dl class="row mb-0">
+          <dt class="col-sm-4">Equipo</dt><dd class="col-sm-8">{{ order.equipment }}</dd>
+          <dt class="col-sm-4">Parte</dt><dd class="col-sm-8">{{ order.machine_part|default:"Equipo completo" }}</dd>
+          <dt class="col-sm-4">Descripción</dt><dd class="col-sm-8">{{ order.description|default:"—"|linebreaksbr }}</dd>
+          <dt class="col-sm-4">Inicio</dt><dd class="col-sm-8">{{ order.start_date|date:"d/m/Y" }}</dd>
+          <dt class="col-sm-4">Duración</dt><dd class="col-sm-8">{{ order.estimated_days }} días corridos</dd>
+          <dt class="col-sm-4">Fecha límite</dt><dd class="col-sm-8">{{ order.due_date|date:"d/m/Y" }}</dd>
+          <dt class="col-sm-4">Supervisores</dt>
+          <dd class="col-sm-8">{% for person in order.supervisors.all %}{{ person.get_username }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}</dd>
+          <dt class="col-sm-4">Técnicos</dt>
+          <dd class="col-sm-8">{% for person in order.technicians.all %}{{ person.get_username }}{% if not forloop.last %}, {% endif %}{% empty %}Sin asignar{% endfor %}</dd>
+        </dl>
+      </div>
+    </section>
+    {% if can_manage %}
+      <div class="row g-3">
+        <div class="col-md-6">
+          <section class="card shadow-sm h-100">
+            <div class="card-body">
+              <h2 class="h5">Actualizar estado</h2>
+              <form method="post" action="{% url 'work-order-status' order.pk %}">
+                {% csrf_token %}{{ status_form.as_p }}
+                <button class="btn btn-primary" type="submit" {% if not status_form.fields.status.choices %}disabled{% endif %}>Guardar estado</button>
+              </form>
+            </div>
+          </section>
+        </div>
+        <div class="col-md-6">
+          <section class="card shadow-sm h-100">
+            <div class="card-body">
+              <h2 class="h5">Asignar técnicos</h2>
+              <form method="post" action="{% url 'work-order-technicians' order.pk %}">
+                {% csrf_token %}{{ technician_form.as_p }}
+                <button class="btn btn-primary" type="submit">Guardar asignación</button>
+              </form>
+            </div>
+          </section>
+        </div>
+      </div>
+      <a class="btn btn-outline-primary mt-3" href="{% url 'work-order-change-request' order.pk %}">Solicitar cambio sujeto a aprobación</a>
+    {% endif %}
+  </div>
+  <div class="col-lg-5">
+    <section class="card shadow-sm">
+      <div class="card-body">
+        <h2 class="h5">Historial</h2>
+        <ul class="list-group list-group-flush">
+          {% for entry in order.history.all %}
+            <li class="list-group-item px-0">
+              <strong>{{ entry.action }}</strong>
+              <div class="small text-muted">{{ entry.actor.get_username }} · {{ entry.created_at|date:"d/m/Y H:i" }}</div>
+              {% if entry.new_values %}<div class="small">{{ entry.new_values }}</div>{% endif %}
+            </li>
+          {% empty %}
+            <li class="list-group-item px-0 text-muted">Sin cambios registrados.</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </section>
+    <section class="card shadow-sm mt-3">
+      <div class="card-body">
+        <h2 class="h5">Solicitudes de cambio</h2>
+        {% for change in order.change_requests.all %}
+          <div class="border-bottom py-2">
+            <div><strong>{{ change.get_status_display }}</strong> · {{ change.created_at|date:"d/m/Y H:i" }}</div>
+            <div class="small">{{ change.reason }}</div>
+            {% if change.resolution_comment %}<div class="small text-muted">{{ change.resolution_comment }}</div>{% endif %}
+          </div>
+        {% empty %}
+          <p class="text-muted mb-0">No hay solicitudes.</p>
+        {% endfor %}
+      </div>
+    </section>
+  </div>
+</div>
+{% endblock %}

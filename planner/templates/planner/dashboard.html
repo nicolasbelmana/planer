@@ -1,0 +1,63 @@
+{% extends "planner/base.html" %}
+{% block title %}Órdenes · Maintenance Planner{% endblock %}
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+  <div>
+    <h1 class="h3 mb-1">Órdenes de trabajo</h1>
+    <p class="text-muted mb-0">Consulta el estado operativo y el vencimiento por separado.</p>
+  </div>
+  <div class="d-flex gap-2">
+    {% if pending_count %}
+      <a class="btn btn-outline-warning" href="{% url 'change-request-list' %}">
+        Solicitudes pendientes ({{ pending_count }})
+      </a>
+    {% endif %}
+    {% if can_create %}
+      <a class="btn btn-primary" href="{% url 'work-order-create' %}">Nueva orden</a>
+    {% endif %}
+  </div>
+</div>
+<form class="row g-2 mb-3" method="get">
+  <div class="col-sm-5 col-md-4">
+    <select class="form-select" name="status">
+      <option value="">Todos los estados</option>
+      {% for value, label in statuses %}
+        <option value="{{ value }}" {% if selected_status == value %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-sm-5 col-md-4">
+    <select class="form-select" name="overdue">
+      <option value="">Con y sin vencimiento</option>
+      <option value="yes" {% if selected_overdue == "yes" %}selected{% endif %}>Solo vencidas</option>
+      <option value="no" {% if selected_overdue == "no" %}selected{% endif %}>No vencidas</option>
+    </select>
+  </div>
+  <div class="col-sm-2"><button class="btn btn-outline-secondary w-100" type="submit">Filtrar</button></div>
+</form>
+<div class="card shadow-sm">
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead class="table-light">
+        <tr><th>Orden</th><th>Equipo</th><th>Inicio</th><th>Vence</th><th>Estado</th><th>Asignados</th></tr>
+      </thead>
+      <tbody>
+        {% for order in orders %}
+          <tr>
+            <td><a href="{% url 'work-order-detail' order.pk %}">OT-{{ order.pk }} · {{ order.title }}</a></td>
+            <td>{{ order.equipment.name }}</td>
+            <td>{{ order.start_date|date:"d/m/Y" }}</td>
+            <td>{{ order.due_date|date:"d/m/Y" }}</td>
+            <td><span class="badge text-bg-secondary">{{ order.get_status_display }}</span>
+              {% if order.is_overdue %}<span class="badge text-bg-danger">Vencida</span>{% endif %}
+            </td>
+            <td>{{ order.supervisors.count }} sup. · {{ order.technicians.count }} téc.</td>
+          </tr>
+        {% empty %}
+          <tr><td class="text-center text-muted py-4" colspan="6">No hay órdenes para mostrar.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

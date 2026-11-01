@@ -1,0 +1,38 @@
+{% extends "planner/base.html" %}
+{% block title %}Solicitudes pendientes · Maintenance Planner{% endblock %}
+{% block content %}
+<h1 class="h3 mb-3">Solicitudes pendientes</h1>
+{% for change in requests %}
+  <section class="card shadow-sm mb-3">
+    <div class="card-body">
+      <div class="d-flex flex-wrap justify-content-between gap-2">
+        <h2 class="h5"><a href="{% url 'work-order-detail' change.work_order.pk %}">OT-{{ change.work_order.pk }} · {{ change.work_order.title }}</a></h2>
+        <span class="text-muted">{{ change.created_at|date:"d/m/Y H:i" }}</span>
+      </div>
+      <p class="mb-1"><strong>Solicitada por:</strong> {{ change.requested_by.get_username }}</p>
+      <p><strong>Motivo:</strong> {{ change.reason }}</p>
+      <dl class="row small bg-light p-3">
+        <dt class="col-sm-4">Inicio</dt><dd class="col-sm-8">{{ change.proposed_display.start_date|date:"d/m/Y" }}</dd>
+        <dt class="col-sm-4">Duración</dt><dd class="col-sm-8">{{ change.proposed_display.estimated_days }} días corridos</dd>
+        <dt class="col-sm-4">Equipo</dt><dd class="col-sm-8">{{ change.proposed_display.equipment }}</dd>
+        <dt class="col-sm-4">Parte</dt><dd class="col-sm-8">{{ change.proposed_display.machine_part }}</dd>
+        <dt class="col-sm-4">Supervisores</dt>
+        <dd class="col-sm-8">{{ change.proposed_display.supervisors|join:", " }}</dd>
+      </dl>
+      <form class="row g-2" method="post" action="{% url 'change-request-resolve' change.pk %}">
+        {% csrf_token %}
+        <div class="col-md-3">
+          <select class="form-select" name="decision" required>
+            <option value="approve">Aprobar</option>
+            <option value="reject">Rechazar</option>
+          </select>
+        </div>
+        <div class="col-md-6"><input class="form-control" name="comment" maxlength="2000" placeholder="Comentario (opcional)"></div>
+        <div class="col-md-3"><button class="btn btn-primary w-100" type="submit">Resolver</button></div>
+      </form>
+    </div>
+  </section>
+{% empty %}
+  <div class="alert alert-info">No hay solicitudes pendientes.</div>
+{% endfor %}
+{% endblock %}
