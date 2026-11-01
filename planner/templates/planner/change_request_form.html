@@ -6,7 +6,7 @@
     <div class="card shadow-sm">
       <div class="card-body p-4">
         <h1 class="h3">Solicitar cambio para OT-{{ order.pk }}</h1>
-        <p class="text-muted">Las fechas, duración, equipo, parte y supervisores solo cambiarán si el jefe aprueba la solicitud. La asignación de técnicos se gestiona directamente en la orden.</p>
+        <p class="text-muted">Las fechas, duración, equipo, parte y supervisores solo cambiarán si el jefe aprueba la solicitud. La asignación de operarios y técnicos se gestiona directamente en la orden.</p>
         <form method="post">
           {% csrf_token %}{{ form.as_p }}
           <button class="btn btn-primary" type="submit">Enviar solicitud</button>

@@ -1,0 +1,19 @@
+{% extends "planner/base.html" %}
+{% block title %}Nuevo plan preventivo{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+    <section class="card shadow-sm">
+      <div class="card-body p-4">
+        <h1 class="h3">Programar mantenimiento preventivo</h1>
+        <p class="text-muted">El próximo ciclo se calcula desde la fecha en que marques como realizado el mantenimiento.</p>
+        <form method="post">
+          {% csrf_token %}{{ form.as_p }}
+          <button class="btn btn-primary" type="submit">Guardar plan</button>
+          <a class="btn btn-outline-secondary" href="{% url 'preventive-plan-list' %}">Cancelar</a>
+        </form>
+      </div>
+    </section>
+  </div>
+</div>
+{% endblock %}

@@ -45,13 +45,13 @@
         {% for order in orders %}
           <tr>
             <td><a href="{% url 'work-order-detail' order.pk %}">OT-{{ order.pk }} · {{ order.title }}</a></td>
-            <td>{{ order.equipment.name }}</td>
+            <td>{{ order.display_equipment }}</td>
             <td>{{ order.start_date|date:"d/m/Y" }}</td>
             <td>{{ order.due_date|date:"d/m/Y" }}</td>
             <td><span class="badge text-bg-secondary">{{ order.get_status_display }}</span>
               {% if order.is_overdue %}<span class="badge text-bg-danger">Vencida</span>{% endif %}
             </td>
-            <td>{{ order.supervisors.count }} sup. · {{ order.technicians.count }} téc.</td>
+            <td>{{ order.supervisors.count }} sup. · {{ order.technicians.count }} técnicos/oper.</td>
           </tr>
         {% empty %}
           <tr><td class="text-center text-muted py-4" colspan="6">No hay órdenes para mostrar.</td></tr>

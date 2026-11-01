@@ -16,11 +16,27 @@
             <a class="nav-link text-white" href="{% url 'dashboard' %}">Órdenes</a>
           {% endif %}
           {% if user.is_superuser %}
+            <a class="nav-link text-white" href="{% url 'equipment-list' %}">Equipos simples</a>
+            <a class="nav-link text-white" href="{% url 'asset-list' %}">Activos</a>
+            <a class="nav-link text-white" href="{% url 'preventive-plan-list' %}">Preventivos</a>
+            <a class="nav-link text-white" href="{% url 'materials-dashboard' %}">Materiales</a>
+            <a class="nav-link text-white" href="{% url 'staff-list' %}">Personal</a>
             <a class="nav-link text-white" href="{% url 'change-request-list' %}">Solicitudes</a>
           {% else %}
             {% for group in user.groups.all %}
               {% if group.name == "Jefe" %}
+                <a class="nav-link text-white" href="{% url 'equipment-list' %}">Equipos simples</a>
+                <a class="nav-link text-white" href="{% url 'asset-list' %}">Activos</a>
+                <a class="nav-link text-white" href="{% url 'preventive-plan-list' %}">Preventivos</a>
+                <a class="nav-link text-white" href="{% url 'materials-dashboard' %}">Materiales</a>
+                <a class="nav-link text-white" href="{% url 'staff-list' %}">Personal</a>
                 <a class="nav-link text-white" href="{% url 'change-request-list' %}">Solicitudes</a>
+              {% elif group.name == "Supervisor" %}
+                <a class="nav-link text-white" href="{% url 'asset-list' %}">Activos</a>
+                <a class="nav-link text-white" href="{% url 'preventive-plan-list' %}">Preventivos</a>
+                <a class="nav-link text-white" href="{% url 'materials-dashboard' %}">Materiales</a>
+              {% elif group.name == "Operario" or group.name == "Técnico" or group.name == "Pañolero" %}
+                <a class="nav-link text-white" href="{% url 'materials-dashboard' %}">Materiales</a>
               {% endif %}
             {% endfor %}
           {% endif %}

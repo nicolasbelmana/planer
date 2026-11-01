@@ -1,0 +1,33 @@
+<div class="list-group-item">
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-2" style="padding-left: {{ depth }}rem">
+    <div>
+      {% if depth %}<span class="text-muted me-1">↳</span>{% endif %}
+      <a class="fw-semibold text-decoration-none" href="{% url 'asset-detail' node.pk %}">{{ node.name }}</a>
+      <span class="badge text-bg-light border">{{ node.asset_type.name }}</span>
+      {% if node.brand or node.model %}
+        <span class="small text-muted">{{ node.brand }} {{ node.model }}</span>
+      {% endif %}
+      {% if node.floor_asset %}
+        <span class="small text-muted">· Piso: {{ node.floor_asset.name }}</span>
+      {% endif %}
+    </div>
+    <div class="d-flex gap-2">
+      {% if user.is_superuser %}
+        <a class="btn btn-sm btn-outline-primary" href="{% url 'asset-create' %}?parent={{ node.pk }}">Agregar hijo</a>
+        <a class="btn btn-sm btn-outline-secondary" href="{% url 'asset-detail' node.pk %}">Ver</a>
+      {% else %}
+        {% for group in user.groups.all %}
+          {% if group.name == "Jefe" %}
+            <a class="btn btn-sm btn-outline-primary" href="{% url 'asset-create' %}?parent={{ node.pk }}">Agregar hijo</a>
+          {% endif %}
+        {% endfor %}
+        <a class="btn btn-sm btn-outline-secondary" href="{% url 'asset-detail' node.pk %}">Ver</a>
+      {% endif %}
+    </div>
+  </div>
+  {% if node.tree_children %}
+    {% for child in node.tree_children %}
+      {% include "planner/asset_tree_node.html" with node=child depth=depth|add:"1" %}
+    {% endfor %}
+  {% endif %}
+</div>

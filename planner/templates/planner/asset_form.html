@@ -1,0 +1,55 @@
+{% extends "planner/base.html" %}
+{% block title %}Agregar activo · Maintenance Planner{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+    <div class="card shadow-sm">
+      <div class="card-body p-4">
+        <h1 class="h3">Agregar activo</h1>
+        <p class="text-muted">Elige el tipo para ver sus campos técnicos. La ubicación puede heredarse del piso en la jerarquía.</p>
+        <form method="post" id="asset-form">
+          {% csrf_token %}
+          {% for field in form %}
+            {% if field.name|slice:":6" != "spec__" %}
+              <div class="mb-3">
+                <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                {{ field }}
+                {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+                {% for error in field.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+              </div>
+            {% endif %}
+          {% endfor %}
+          <h2 class="h5 mt-4">Especificaciones del tipo</h2>
+          {% for asset_type, fields in form.specification_groups %}
+            <fieldset class="border rounded p-3 mb-3 asset-spec-group" data-asset-type="{{ asset_type.pk }}">
+              <legend class="float-none w-auto px-2 fs-6">{{ asset_type.name }}</legend>
+              {% for field_name, field in fields %}
+                <div class="mb-2">
+                  <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                  {{ field }}
+                </div>
+              {% endfor %}
+            </fieldset>
+          {% empty %}
+            <p class="text-muted">No hay campos técnicos configurados. Ejecuta el comando de inicialización de tipos.</p>
+          {% endfor %}
+          <button class="btn btn-primary" type="submit">Guardar activo</button>
+          <a class="btn btn-outline-secondary" href="{% url 'asset-list' %}">Cancelar</a>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+  const typeSelect = document.getElementById("id_asset_type");
+  const specGroups = document.querySelectorAll(".asset-spec-group");
+  function showAssetSpecifications() {
+    const selected = typeSelect.value;
+    specGroups.forEach((group) => {
+      group.hidden = group.dataset.assetType !== selected;
+    });
+  }
+  typeSelect.addEventListener("change", showAssetSpecifications);
+  showAssetSpecifications();
+</script>
+{% endblock %}

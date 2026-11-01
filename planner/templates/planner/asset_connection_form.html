@@ -1,0 +1,19 @@
+{% extends "planner/base.html" %}
+{% block title %}Vincular activos{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-7">
+    <section class="card shadow-sm">
+      <div class="card-body p-4">
+        <h1 class="h3">Vincular activos</h1>
+        <p class="text-muted">Registra conexiones entre ramas, como un motor conectado a una cañería o alimentado por un tablero.</p>
+        <form method="post">
+          {% csrf_token %}{{ form.as_p }}
+          <button class="btn btn-primary" type="submit">Guardar vínculo</button>
+          <a class="btn btn-outline-secondary" href="{% url 'asset-list' %}">Cancelar</a>
+        </form>
+      </div>
+    </section>
+  </div>
+</div>
+{% endblock %}

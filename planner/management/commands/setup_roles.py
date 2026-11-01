@@ -5,7 +5,7 @@ from planner.roles import ROLE_NAMES
 
 
 class Command(BaseCommand):
-    help = "Crea los grupos Jefe, Supervisor y Tecnico si todavía no existen."
+    help = "Crea los grupos de roles de Maintenance Planner si todavía no existen."
 
     def handle(self, *args, **options):
         for name in ROLE_NAMES:

@@ -1,0 +1,38 @@
+{% extends "planner/base.html" %}
+{% block title %}Árbol de activos · Maintenance Planner{% endblock %}
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+  <div>
+    <h1 class="h3 mb-1">Árbol de activos</h1>
+    <p class="text-muted mb-0">Organiza planta, pisos, sistemas, equipos, partes y componentes.</p>
+  </div>
+  <div class="d-flex gap-2">
+    {% if user.is_superuser %}
+      <a class="btn btn-primary" href="{% url 'asset-create' %}">Agregar activo</a>
+      <a class="btn btn-outline-primary" href="{% url 'asset-connection-create' %}">Vincular activos</a>
+    {% else %}
+      {% for group in user.groups.all %}
+        {% if group.name == "Jefe" %}
+          <a class="btn btn-primary" href="{% url 'asset-create' %}">Agregar activo</a>
+          <a class="btn btn-outline-primary" href="{% url 'asset-connection-create' %}">Vincular activos</a>
+        {% endif %}
+      {% endfor %}
+    {% endif %}
+  </div>
+</div>
+<div class="alert alert-info">
+  Los campos técnicos se configuran por tipo de activo. Se pueden registrar especificaciones, ubicación/piso,
+  alimentación y conexiones entre elementos de distintas ramas.
+</div>
+<div class="card shadow-sm">
+  <div class="list-group list-group-flush">
+    {% for asset in asset_roots %}
+      {% include "planner/asset_tree_node.html" with node=asset depth=0 %}
+    {% empty %}
+      <div class="list-group-item text-muted">
+        Todavía no hay activos. Inicializa los tipos y crea el primer elemento.
+      </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

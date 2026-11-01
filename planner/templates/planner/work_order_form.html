@@ -6,7 +6,7 @@
     <div class="card shadow-sm">
       <div class="card-body p-4">
         <h1 class="h3 mb-3">Crear orden de trabajo</h1>
-        <p class="text-muted">El jefe crea la orden y asigna uno o más supervisores. Luego, el supervisor asignará técnicos.</p>
+        <p class="text-muted">Vincula la orden con uno o más activos del árbol (por ejemplo, un motor o una válvula) o selecciona un equipo legado. El jefe asigna supervisores; luego ellos asignan operarios y técnicos.</p>
         <form method="post">
           {% csrf_token %}
           {{ form.as_p }}

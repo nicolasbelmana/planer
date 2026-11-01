@@ -1,0 +1,83 @@
+{% extends "planner/base.html" %}
+{% block title %}{{ asset.name }} · Activos{% endblock %}
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-start mb-3 gap-2">
+  <div>
+    <a href="{% url 'asset-list' %}" class="text-decoration-none">&larr; Volver al árbol</a>
+    <h1 class="h3 mt-2 mb-1">{{ asset.name }}</h1>
+    <span class="badge text-bg-secondary">{{ asset.asset_type.name }}</span>
+    {% if asset.parent %}<span class="text-muted">· Padre: <a href="{% url 'asset-detail' asset.parent.pk %}">{{ asset.parent.name }}</a></span>{% endif %}
+    {% if asset.floor %}<span class="text-muted">· Piso: {{ asset.floor.name }}</span>{% endif %}
+  </div>
+  {% if can_manage %}
+    <div class="d-flex flex-wrap gap-2">
+      <a class="btn btn-outline-secondary" href="{% url 'asset-edit' asset.pk %}">Editar activo</a>
+      <a class="btn btn-outline-primary" href="{% url 'asset-create' %}?parent={{ asset.pk }}">Agregar parte/componente</a>
+      <a class="btn btn-outline-secondary" href="{% url 'asset-connection-create' %}?source={{ asset.pk }}">Vincular activo</a>
+      <a class="btn btn-primary" href="{% url 'preventive-plan-create' %}?asset={{ asset.pk }}">Programar preventivo</a>
+    </div>
+  {% endif %}
+</div>
+<div class="row g-3">
+  <div class="col-lg-6">
+    <section class="card shadow-sm h-100">
+      <div class="card-body">
+        <h2 class="h5">Identificación y datos técnicos</h2>
+        <dl class="row">
+          <dt class="col-sm-4">Marca</dt><dd class="col-sm-8">{{ asset.brand|default:"—" }}</dd>
+          <dt class="col-sm-4">Modelo</dt><dd class="col-sm-8">{{ asset.model|default:"—" }}</dd>
+          <dt class="col-sm-4">N.º de serie</dt><dd class="col-sm-8">{{ asset.serial_number|default:"—" }}</dd>
+          {% for field in technical_specs %}
+            <dt class="col-sm-4">{{ field.label }}</dt>
+            <dd class="col-sm-8">
+              {{ field.value|default:"—" }}
+              {% if field.unit and field.value %}{{ field.unit }}{% endif %}
+            </dd>
+          {% endfor %}
+        </dl>
+        {% if asset.notes %}<h3 class="h6">Notas</h3><p>{{ asset.notes|linebreaksbr }}</p>{% endif %}
+      </div>
+    </section>
+  </div>
+  <div class="col-lg-6">
+    <section class="card shadow-sm h-100">
+      <div class="card-body">
+        <h2 class="h5">Jerarquía</h2>
+        {% for child in asset.children.all %}
+          <p class="mb-1"><a href="{% url 'asset-detail' child.pk %}">{{ child.name }}</a> <span class="text-muted">· {{ child.asset_type.name }}</span></p>
+        {% empty %}
+          <p class="text-muted mb-0">No tiene elementos hijos.</p>
+        {% endfor %}
+      </div>
+    </section>
+  </div>
+  <div class="col-lg-6">
+    <section class="card shadow-sm">
+      <div class="card-body">
+        <h2 class="h5">Alimentación y conexiones</h2>
+        {% for relation in asset.outgoing_connections.all %}
+          <p class="mb-1">{{ relation.get_kind_display }} → <a href="{% url 'asset-detail' relation.target.pk %}">{{ relation.target.name }}</a> <span class="text-muted">({{ relation.target.asset_type.name }})</span></p>
+        {% endfor %}
+        {% for relation in asset.incoming_connections.all %}
+          <p class="mb-1"><a href="{% url 'asset-detail' relation.source.pk %}">{{ relation.source.name }}</a> <span class="text-muted">→ {{ relation.get_kind_display }}</span></p>
+        {% endfor %}
+        {% if not asset.outgoing_connections.all and not asset.incoming_connections.all %}
+          <p class="text-muted mb-0">No hay conexiones registradas.</p>
+        {% endif %}
+      </div>
+    </section>
+  </div>
+  <div class="col-lg-6">
+    <section class="card shadow-sm">
+      <div class="card-body">
+        <h2 class="h5">Planes preventivos</h2>
+        {% for plan in asset.maintenance_plans.all %}
+          <p class="mb-1"><a href="{% url 'preventive-plan-list' %}">{{ plan.name }}</a> · próxima fecha {{ plan.next_due_date|date:"d/m/Y" }}</p>
+        {% empty %}
+          <p class="text-muted mb-0">No tiene planes preventivos.</p>
+        {% endfor %}
+      </div>
+    </section>
+  </div>
+</div>
+{% endblock %}

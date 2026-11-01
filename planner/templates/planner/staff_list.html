@@ -1,0 +1,31 @@
+{% extends "planner/base.html" %}
+{% block title %}Personal · Maintenance Planner{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h1 class="h3 mb-1">Personal y roles</h1>
+    <p class="text-muted mb-0">Crea cuentas para Jefes, Supervisores, Operarios, Técnicos y Pañoleros.</p>
+  </div>
+  <a class="btn btn-primary" href="{% url 'staff-create' %}">Crear usuario</a>
+</div>
+<div class="card shadow-sm">
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead class="table-light"><tr><th>Usuario</th><th>Nombre</th><th>Email</th><th>Rol</th><th>Estado</th></tr></thead>
+      <tbody>
+        {% for person in staff_users %}
+          <tr>
+            <td>{{ person.get_username }}</td>
+            <td>{{ person.get_full_name|default:"—" }}</td>
+            <td>{{ person.email|default:"—" }}</td>
+            <td>{% if person.is_superuser %}<span class="badge text-bg-dark">Jefe (Superusuario)</span>{% else %}{% for group in person.groups.all %}<span class="badge text-bg-secondary">{{ group.name }}</span>{% empty %}—{% endfor %}{% endif %}</td>
+            <td>{% if person.is_active %}<span class="badge text-bg-success">Activo</span>{% else %}<span class="badge text-bg-danger">Inactivo</span>{% endif %}</td>
+          </tr>
+        {% empty %}
+          <tr><td class="text-center text-muted py-4" colspan="5">Todavía no hay cuentas de personal.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

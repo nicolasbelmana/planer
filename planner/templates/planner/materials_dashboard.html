@@ -1,0 +1,133 @@
+{% extends "planner/base.html" %}
+{% block title %}Materiales y pañol · Maintenance Planner{% endblock %}
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+  <div>
+    <h1 class="h3 mb-1">Materiales y pañol</h1>
+    <p class="text-muted mb-0">Consulta el stock y el seguimiento de pedidos asociados a órdenes.</p>
+  </div>
+</div>
+
+<section class="card shadow-sm mb-3">
+  <div class="card-body">
+    <h2 class="h5">Stock disponible</h2>
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light"><tr><th>Material</th><th>Disponible</th><th>Stock mínimo</th><th>Estado</th></tr></thead>
+        <tbody>
+          {% for material in materials %}
+            <tr>
+              <td>{{ material.name }}</td>
+              <td>{{ material.quantity_in_stock }} {{ material.unit }}</td>
+              <td>{{ material.minimum_stock }} {{ material.unit }}</td>
+              <td>{% if material.is_low_stock %}<span class="badge text-bg-warning">Stock bajo</span>{% else %}<span class="badge text-bg-success">Disponible</span>{% endif %}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="4" class="text-center text-muted py-3">Todavía no hay materiales cargados.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+{% if can_manage_stock %}
+  <div class="row g-3 mb-3">
+    <div class="col-lg-5">
+      <section class="card shadow-sm h-100">
+        <div class="card-body">
+          <h2 class="h5">Agregar material al catálogo</h2>
+          <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="create_material">
+            {{ material_form.as_p }}
+            <button class="btn btn-primary" type="submit">Guardar material</button>
+          </form>
+        </div>
+      </section>
+    </div>
+    <div class="col-lg-7">
+      <section class="card shadow-sm h-100">
+        <div class="card-body">
+          <h2 class="h5">Registrar ingreso de stock</h2>
+          <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="receive_stock">
+            {{ receipt_form.as_p }}
+            <button class="btn btn-primary" type="submit">Registrar ingreso</button>
+          </form>
+        </div>
+      </section>
+    </div>
+  </div>
+{% endif %}
+
+<section class="card shadow-sm mb-3">
+  <div class="card-body">
+    <h2 class="h5">Pedidos de materiales por orden</h2>
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light"><tr><th>Orden</th><th>Material</th><th>Pedido</th><th>Entregado</th><th>Estado</th><th>Solicitó</th>{% if can_manage_stock %}<th>Procesar entrega</th>{% endif %}</tr></thead>
+        <tbody>
+          {% for item in requests %}
+            <tr>
+              <td><a href="{% url 'work-order-detail' item.work_order_id %}">OT-{{ item.work_order_id }} · {{ item.work_order.title }}</a></td>
+              <td>{{ item.material.name }} ({{ item.material.unit }})</td>
+              <td>{{ item.requested_quantity }}</td>
+              <td>{{ item.delivered_quantity }}</td>
+              <td>{{ item.get_status_display }}</td>
+              <td>{{ item.requested_by.get_username }}</td>
+              {% if can_manage_stock %}
+                <td>
+                  {% if item.status != "FULFILLED" %}
+                    <form method="post" action="{% url 'material-request-deliver' item.pk %}" class="d-flex flex-column gap-1">
+                      {% csrf_token %}
+                      <input class="form-control form-control-sm" type="number" name="quantity" min="0.001" max="{{ item.remaining_quantity }}" step="0.001" placeholder="Cantidad" required>
+                      <input class="form-control form-control-sm" type="text" name="notes" maxlength="2000" placeholder="Detalle (opcional)">
+                      <button class="btn btn-sm btn-outline-primary" type="submit">Entregar</button>
+                    </form>
+                    <small class="text-muted">Pendiente: {{ item.remaining_quantity }} {{ item.material.unit }} · Stock: {{ item.material.quantity_in_stock }}</small>
+                  {% else %}
+                    <span class="text-muted">Pedido completo</span>
+                  {% endif %}
+                </td>
+              {% endif %}
+            </tr>
+            {% if item.notes %}<tr><td class="text-muted small" colspan="{% if can_manage_stock %}7{% else %}6{% endif %}">{{ item.notes }}</td></tr>{% endif %}
+          {% empty %}
+            <tr><td colspan="{% if can_manage_stock %}7{% else %}6{% endif %}" class="text-center text-muted py-3">No hay pedidos de materiales.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+{% if can_manage_stock %}
+  <section class="card shadow-sm">
+    <div class="card-body">
+      <h2 class="h5">Movimientos recientes</h2>
+      <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+          <thead class="table-light"><tr><th>Fecha</th><th>Tipo</th><th>Material</th><th>Cantidad</th><th>Orden</th><th>Usuario</th><th>Detalle</th></tr></thead>
+          <tbody>
+            {% for movement in movements %}
+              <tr>
+                <td>{{ movement.created_at|date:"d/m/Y H:i" }}</td>
+                <td>{{ movement.get_kind_display }}</td>
+                <td>{{ movement.material.name }}</td>
+                <td>{{ movement.quantity }} {{ movement.material.unit }}</td>
+                <td>{% if movement.work_order_id %}OT-{{ movement.work_order_id }}{% else %}—{% endif %}</td>
+                <td>{{ movement.actor.get_username }}</td>
+                <td>{{ movement.notes|default:"—" }}</td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="7" class="text-center text-muted py-3">Todavía no hay movimientos de stock.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+{% endif %}
+{% endblock %}
