@@ -27,16 +27,11 @@ from .forms import (
     ChangeRequestResolutionForm,
     EquipmentForm,
     MachinePartForm,
-    MaterialCatalogForm,
-    MaterialDeliveryForm,
-    MaterialStockReceiptForm,
     PreventiveMaintenancePlanForm,
     PreventiveMaintenanceRecordForm,
     StaffUserCreationForm,
     StatusUpdateForm,
     TechnicianAssignmentForm,
-    WorkOrderDiaryEntryForm,
-    WorkOrderMaterialRequestForm,
     WorkOrderCreateForm,
 )
 from .models import (
@@ -45,19 +40,15 @@ from .models import (
     AssetType,
     Equipment,
     MachinePart,
-    Material,
-    MaterialStockMovement,
     PreventiveMaintenancePlan,
     PreventiveMaintenanceRecord,
     WorkOrder,
     WorkOrderChangeRequest,
-    WorkOrderMaterialRequest,
 )
 from .roles import (
     CHIEF,
     OPERATOR,
     ROLE_NAMES,
-    STOREKEEPER,
     SUPERVISOR,
     TECHNICIAN,
     has_role,
@@ -65,14 +56,7 @@ from .roles import (
 from .services import (
     assign_technicians,
     can_manage_work_order,
-    can_manage_material_stock,
-    can_request_work_order_materials,
     create_work_order,
-    create_material_request,
-    create_diary_entry,
-    deliver_material_request,
-    mark_materials_received,
-    receive_material_stock,
     resolve_change_request,
     submit_change_request,
     update_work_order_status,
@@ -398,96 +382,6 @@ def staff_create(request):
 
 
 @login_required
-def materials_dashboard(request):
-    allowed_roles = (CHIEF, SUPERVISOR, OPERATOR, TECHNICIAN, STOREKEEPER)
-    if not any(has_role(request.user, role) for role in allowed_roles):
-        raise PermissionDenied("No tienes permiso para consultar materiales.")
-    can_manage_stock = can_manage_material_stock(request.user)
-    material_form = MaterialCatalogForm()
-    receipt_form = MaterialStockReceiptForm()
-    if request.method == "POST":
-        if not can_manage_stock:
-            raise PermissionDenied("Solo el jefe o un pañolero puede administrar el stock.")
-        action = request.POST.get("action")
-        if action == "create_material":
-            material_form = MaterialCatalogForm(request.POST)
-            if material_form.is_valid():
-                material_form.save()
-                messages.success(request, "Se agregó el material al catálogo.")
-                return redirect("materials-dashboard")
-        elif action == "receive_stock":
-            receipt_form = MaterialStockReceiptForm(request.POST)
-            if receipt_form.is_valid():
-                try:
-                    receive_material_stock(
-                        actor=request.user,
-                        material=receipt_form.cleaned_data["material"],
-                        quantity=receipt_form.cleaned_data["quantity"],
-                        notes=receipt_form.cleaned_data["notes"],
-                    )
-                except ValidationError as error:
-                    receipt_form.add_error(None, error)
-                else:
-                    messages.success(request, "Se registró el ingreso de stock.")
-                    return redirect("materials-dashboard")
-        else:
-            raise PermissionDenied("Acción de materiales no válida.")
-
-    assigned_orders = WorkOrder.objects.filter(
-        Q(supervisors=request.user) | Q(technicians=request.user)
-    ).distinct()
-    requests = WorkOrderMaterialRequest.objects.select_related(
-        "work_order", "material", "requested_by"
-    )
-    movements = MaterialStockMovement.objects.select_related(
-        "material", "actor", "work_order", "request"
-    )
-    if not can_manage_stock:
-        requests = requests.filter(work_order__in=assigned_orders)
-        movements = movements.filter(work_order__in=assigned_orders)
-    return render(
-        request,
-        "planner/materials_dashboard.html",
-        {
-            "materials": Material.objects.all(),
-            "requests": requests,
-            "movements": movements[:50],
-            "can_manage_stock": can_manage_stock,
-            "material_form": material_form,
-            "receipt_form": receipt_form,
-        },
-    )
-
-
-@login_required
-@require_POST
-def material_request_deliver(request, pk):
-    material_request = get_object_or_404(
-        WorkOrderMaterialRequest.objects.select_related("work_order", "material"),
-        pk=pk,
-    )
-    form = MaterialDeliveryForm(request.POST)
-    if form.is_valid():
-        try:
-            deliver_material_request(
-                request=material_request,
-                actor=request.user,
-                quantity=form.cleaned_data["quantity"],
-                notes=form.cleaned_data["notes"],
-            )
-        except (PermissionDenied, ValidationError) as error:
-            messages.error(request, str(error))
-        else:
-            messages.success(request, "Se registró la entrega y se actualizó el stock.")
-    else:
-        messages.error(
-            request,
-            "Cantidad inválida: " + "; ".join(form.errors.get("quantity", [])),
-        )
-    return redirect("materials-dashboard")
-
-
-@login_required
 def work_order_create(request):
     if not has_role(request.user, CHIEF):
         raise PermissionDenied("Solo el jefe puede crear órdenes.")
@@ -519,10 +413,6 @@ def work_order_detail(request, pk):
             "assets__asset_type",
             "history__actor",
             "change_requests",
-            "diary_entries__operators",
-            "diary_entries__created_by",
-            "material_requests__material",
-            "material_requests__requested_by",
         ),
         pk=pk,
     )
@@ -534,62 +424,22 @@ def work_order_detail(request, pk):
     )
 
 
-def _work_order_detail_context(user, order, *, material_request_form=None):
+def _work_order_detail_context(user, order):
     is_assigned_supervisor = (
         has_role(user, SUPERVISOR) and order.supervisors.filter(pk=user.pk).exists()
     )
     return {
         "order": order,
-        "can_manage": can_manage_work_order(user, order),
         "can_update_progress": can_manage_work_order(user, order),
         "can_assign_operators": is_assigned_supervisor,
         "can_request_change": is_assigned_supervisor,
-        "can_request_materials": can_request_work_order_materials(user, order),
-        "can_review": has_role(user, CHIEF),
         "can_view_assets": has_role(user, CHIEF) or has_role(user, SUPERVISOR),
         "linked_assets": order.assets.select_related("asset_type").all(),
         "status_form": StatusUpdateForm(order),
         "technician_form": TechnicianAssignmentForm(
             initial={"technicians": order.technicians.values_list("pk", flat=True)}
         ),
-        "diary_form": WorkOrderDiaryEntryForm(),
-        "material_request_form": material_request_form
-        or WorkOrderMaterialRequestForm(),
     }
-
-
-@login_required
-@require_POST
-def work_order_material_request_create(request, pk):
-    order = get_object_or_404(
-        WorkOrder.objects.prefetch_related("supervisors", "technicians"),
-        pk=pk,
-    )
-    _require_order_access(request.user, order)
-    form = WorkOrderMaterialRequestForm(request.POST)
-    if form.is_valid():
-        try:
-            create_material_request(
-                order=order,
-                actor=request.user,
-                material=form.cleaned_data["material"],
-                quantity=form.cleaned_data["requested_quantity"],
-                notes=form.cleaned_data["notes"],
-            )
-        except (PermissionDenied, ValidationError) as error:
-            form.add_error(None, error)
-        else:
-            messages.success(request, "El pedido de material quedó registrado.")
-            return redirect("work-order-detail", pk=pk)
-    return render(
-        request,
-        "planner/work_order_detail.html",
-        _work_order_detail_context(
-            request.user,
-            order,
-            material_request_form=form,
-        ),
-    )
 
 
 @login_required
@@ -600,8 +450,6 @@ def work_order_pdf(request, pk):
             "supervisors",
             "technicians",
             "assets__asset_type",
-            "diary_entries__operators",
-            "diary_entries__created_by",
         ),
         pk=pk,
     )
@@ -687,18 +535,6 @@ def work_order_pdf(request, pk):
             paragraph("Operarios y técnicos", body_style),
             paragraph(", ".join(user.get_username() for user in order.technicians.all()), body_style),
         ],
-        [
-            paragraph("Materiales", body_style),
-            paragraph(
-                (
-                    f"Recibidos el {timezone.localtime(order.materials_received_at):%d/%m/%Y %H:%M} "
-                    f"por {order.materials_received_by.get_username()}"
-                )
-                if order.materials_received_at
-                else "Pendientes de recepción",
-                body_style,
-            ),
-        ],
     ]
     table = Table(rows, colWidths=[42 * mm, 128 * mm], repeatRows=1)
     table.setStyle(
@@ -717,55 +553,6 @@ def work_order_pdf(request, pk):
         )
     )
     elements.append(table)
-    diary_entries = list(order.diary_entries.all())
-    if diary_entries:
-        elements.extend(
-            [
-                Spacer(1, 8 * mm),
-                Paragraph("Diario de trabajo", styles["Heading2"]),
-            ]
-        )
-        diary_rows = [
-            [
-                paragraph("Fecha", header_style),
-                paragraph("Trabajo realizado y participantes", header_style),
-            ]
-        ]
-        for entry in diary_entries:
-            participants = ", ".join(
-                operator.get_username() for operator in entry.operators.all()
-            )
-            description = (
-                f"{escape(entry.description).replace(chr(10), '<br/>')}<br/><br/>"
-                f"<b>Participantes:</b> {escape(participants or '—')}<br/>"
-                f"<font size='8'>Registrado por "
-                f"{escape(entry.created_by.get_username())}</font>"
-            )
-            diary_rows.append(
-                [
-                    paragraph(entry.entry_date.strftime("%d/%m/%Y"), body_style),
-                    Paragraph(description, body_style),
-                ]
-            )
-        diary_table = Table(
-            diary_rows,
-            colWidths=[35 * mm, 135 * mm],
-            repeatRows=1,
-        )
-        diary_table.setStyle(
-            TableStyle(
-                [
-                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#243b53")),
-                    ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#cbd5e0")),
-                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                    ("LEFTPADDING", (0, 0), (-1, -1), 8),
-                    ("RIGHTPADDING", (0, 0), (-1, -1), 8),
-                    ("TOPPADDING", (0, 0), (-1, -1), 7),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
-                ]
-            )
-        )
-        elements.append(diary_table)
     document.build(elements)
     response = HttpResponse(buffer.getvalue(), content_type="application/pdf")
     response["Content-Disposition"] = f'attachment; filename="orden-{order.pk}.pdf"'
@@ -796,76 +583,6 @@ def work_order_status(request, pk):
     else:
         messages.error(request, "Selecciona un estado válido.")
     return redirect("work-order-detail", pk=pk)
-
-
-@login_required
-@require_POST
-def work_order_materials_received(request, pk):
-    order = get_object_or_404(
-        WorkOrder.objects.prefetch_related("supervisors"),
-        pk=pk,
-    )
-    _require_order_access(request.user, order)
-    _require_order_manager(request.user, order)
-    try:
-        mark_materials_received(order=order, actor=request.user)
-    except (PermissionDenied, ValidationError) as error:
-        messages.error(request, str(error))
-    else:
-        messages.success(request, "Se registró la recepción de materiales.")
-    return redirect("work-order-detail", pk=pk)
-
-
-@login_required
-@require_POST
-def work_order_diary_entry_create(request, pk):
-    order = get_object_or_404(
-        WorkOrder.objects.prefetch_related("supervisors"),
-        pk=pk,
-    )
-    _require_order_access(request.user, order)
-    _require_order_manager(request.user, order)
-    form = WorkOrderDiaryEntryForm(request.POST)
-    if form.is_valid():
-        try:
-            create_diary_entry(
-                order=order,
-                actor=request.user,
-                entry_date=form.cleaned_data["entry_date"],
-                description=form.cleaned_data["description"],
-                operators=form.cleaned_data["operators"],
-            )
-        except (PermissionDenied, ValidationError) as error:
-            form.add_error(None, error)
-        else:
-            messages.success(request, "Se agregó la tarea al diario de la orden.")
-            return redirect("work-order-detail", pk=pk)
-    return render(
-        request,
-        "planner/work_order_detail.html",
-        {
-            "order": order,
-            "can_manage": can_manage_work_order(request.user, order),
-            "can_update_progress": can_manage_work_order(request.user, order),
-            "can_assign_operators": (
-                has_role(request.user, SUPERVISOR)
-                and order.supervisors.filter(pk=request.user.pk).exists()
-            ),
-            "can_review": has_role(request.user, CHIEF),
-            "can_request_change": (
-                has_role(request.user, SUPERVISOR)
-                and order.supervisors.filter(pk=request.user.pk).exists()
-            ),
-            "can_view_assets": has_role(request.user, CHIEF)
-            or has_role(request.user, SUPERVISOR),
-            "linked_assets": order.assets.select_related("asset_type").all(),
-            "status_form": StatusUpdateForm(order),
-            "technician_form": TechnicianAssignmentForm(
-                initial={"technicians": order.technicians.values_list("pk", flat=True)}
-            ),
-            "diary_form": form,
-        },
-    )
 
 
 @login_required

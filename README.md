@@ -1,6 +1,6 @@
-# Maintenance Planner
+# Planificador de mantenimiento
 
-Aplicación web inicial para administrar órdenes de mantenimiento con Django. Usa SQLite en desarrollo local y MySQL cuando se configuran las variables `MYSQL_*`.
+Aplicación web para administrar órdenes de mantenimiento con Django. Usa SQLite en desarrollo local y MySQL cuando se configuran las variables `MYSQL_*`.
 
 ## Requisitos
 
@@ -21,13 +21,36 @@ python manage.py createsuperuser
 python manage.py runserver
 ```
 
-Ingresa con el superusuario y usa la sección **Personal** para crear cuentas Jefe, Supervisor, Operario, Técnico y Pañolero; desde **Equipos** registra equipos y partes. El jefe crea órdenes y asigna supervisores; el supervisor asigna operarios y técnicos. El personal técnico solo ve órdenes asignadas y puede descargar su PDF. El superusuario también tiene permisos de Jefe.
+Ingresa con el superusuario y usa **Personal** para crear cuentas Jefe, Supervisor, Operario y Técnico; desde **Equipos** registra equipos y partes. El jefe crea órdenes y asigna supervisores; el supervisor asigna operarios y técnicos. El personal técnico solo ve órdenes asignadas y puede descargar su PDF. El superusuario también tiene permisos de Jefe.
 
-## Materiales y pañol
+## Prueba con Docker en Linux
 
-En **Materiales**, el Jefe o Pañolero puede crear materiales, definir un mínimo de stock, registrar ingresos y entregar pedidos. Los ingresos y entregas quedan en un historial de movimientos. Operarios, Técnicos y Supervisores pueden consultar el catálogo y sus pedidos.
+Esta configuración usa SQLite y conserva la base `db.sqlite3` del directorio del proyecto. Está pensada para pruebas en una red privada; utiliza `runserver` y no es una configuración de producción.
 
-Desde el detalle de una orden, el Jefe, el Supervisor asignado y el personal técnico asignado pueden solicitar materiales. Cada pedido queda relacionado con esa orden y se puede entregar parcial o totalmente. El stock se descuenta al registrar la entrega; no se reserva al crear el pedido. No hace falta aprobación del Jefe para que el Pañolero lo procese.
+```bash
+cp .env.example .env
+```
+
+Edita `.env`: configura `APP_UID` y `APP_GID` con la salida de `id -u` e `id -g`, y `SERVER_BIND_IP` con la IP LAN del servidor si necesitas acceder desde otra computadora. Agrega esa IP a `DJANGO_ALLOWED_HOSTS`. Haz una copia de seguridad de `db.sqlite3` y detén cualquier ejecución local del proyecto antes de iniciar el contenedor.
+
+El contenedor monta el directorio del proyecto para que SQLite pueda escribir tanto en `db.sqlite3` como en sus archivos temporales. Asegúrate de que el directorio y la base sean accesibles para el usuario configurado en `APP_UID` y `APP_GID`. Si la base quedó propiedad de otro usuario, puedes corregirla antes de iniciar:
+
+```bash
+sudo chown "$(id -u):$(id -g)" db.sqlite3
+chmod u+rw db.sqlite3
+```
+
+```bash
+sudo docker compose up -d --build
+sudo docker compose ps
+sudo docker compose logs --tail=100 web
+```
+
+Al iniciar, el contenedor ejecuta las migraciones y prepara roles y tipos de activos. La base SQLite queda montada desde el host, por lo que se conservan los usuarios y datos existentes. No elimines ni reemplaces `db.sqlite3`.
+
+## Datos históricos conservados
+
+La gestión de materiales/stock y el diario de trabajo ya no están disponibles en las pantallas, rutas ni PDF. Sus modelos y migraciones se mantienen para conservar los registros existentes; no ejecutes una migración que elimine esas tablas si necesitas mantenerlos.
 
 ## Árbol de activos y mantenimiento preventivo
 
@@ -64,18 +87,15 @@ Define `DJANGO_SECRET_KEY`, `DJANGO_DEBUG=false` y `DJANGO_ALLOWED_HOSTS`. No us
 ## Reglas implementadas
 
 - El jefe crea órdenes y asigna supervisores.
-- El jefe puede actualizar el estado, confirmar la recepción de materiales y registrar trabajos en cualquier orden. Los supervisores asignados pueden realizar esas mismas actualizaciones en sus órdenes.
-- La recepción de materiales se registra por separado del estado, incluyendo quién y cuándo la confirmó.
-- El diario de trabajo registra fecha, descripción, quién lo ingresó y los operarios o técnicos participantes; se puede incluir a cualquier cuenta técnica activa. El diario aparece en el PDF.
+- El jefe puede actualizar el estado de cualquier orden. Los supervisores asignados pueden actualizar sus órdenes.
 - Los supervisores asignados administran la asignación de operarios y técnicos directamente.
-- Los roles Técnico y Operario son distintos; ambos pueden asignarse a órdenes y solicitar materiales cuando están asignados.
-- El Pañolero administra el catálogo y el stock, y procesa pedidos sin aprobación previa. El stock solo se descuenta al registrar una entrega.
+- Los roles Técnico y Operario son distintos; ambos pueden asignarse a órdenes.
 - Los cambios de fechas, duración, equipo, parte o supervisores requieren aprobación del jefe. Se conserva la solicitud y el cambio pendiente no altera la orden. Los supervisores asignados pueden asignar y cambiar operarios directamente.
 - La fecha de inicio cuenta como día 1: la fecha límite es `fecha_inicio + días_estimados - 1`.
 - El vencimiento es un indicador calculado; no reemplaza el estado operativo.
-- Flujo de estado: En preparación → Esperando materiales → En curso → Finalizado; también se permite En preparación → En curso → Finalizado.
+- Flujo de estado: En preparación → En curso → Finalizado. El estado histórico «Esperando materiales» se conserva para órdenes existentes.
 - Se mantiene historial de creación, cambios de estado, asignaciones y solicitudes/resoluciones.
-- Los Operarios y Técnicos no pueden modificar órdenes ni administrar personal; solo consultar órdenes asignadas, descargar el PDF y solicitar materiales para sus órdenes.
+- Los Operarios y Técnicos no pueden modificar órdenes ni administrar personal; solo consultar órdenes asignadas y descargar el PDF.
 
 ## Validación
 

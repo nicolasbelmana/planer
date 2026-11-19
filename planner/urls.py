@@ -34,31 +34,10 @@ urlpatterns = [
     ),
     path("personal/", views.staff_list, name="staff-list"),
     path("personal/nuevo/", views.staff_create, name="staff-create"),
-    path("materiales/", views.materials_dashboard, name="materials-dashboard"),
-    path(
-        "materiales/pedidos/<int:pk>/entregar/",
-        views.material_request_deliver,
-        name="material-request-deliver",
-    ),
     path("ordenes/nueva/", views.work_order_create, name="work-order-create"),
     path("ordenes/<int:pk>/", views.work_order_detail, name="work-order-detail"),
     path("ordenes/<int:pk>/pdf/", views.work_order_pdf, name="work-order-pdf"),
     path("ordenes/<int:pk>/estado/", views.work_order_status, name="work-order-status"),
-    path(
-        "ordenes/<int:pk>/materiales/recibidos/",
-        views.work_order_materials_received,
-        name="work-order-materials-received",
-    ),
-    path(
-        "ordenes/<int:pk>/diario/nuevo/",
-        views.work_order_diary_entry_create,
-        name="work-order-diary-create",
-    ),
-    path(
-        "ordenes/<int:pk>/materiales/pedir/",
-        views.work_order_material_request_create,
-        name="work-order-material-request-create",
-    ),
     path(
         "ordenes/<int:pk>/tecnicos/",
         views.work_order_technicians,

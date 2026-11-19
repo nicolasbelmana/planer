@@ -1,0 +1,296 @@
+:root {
+  color-scheme: light;
+  --app-ink: #182b45;
+  --app-muted: #68788d;
+  --app-line: #e2e8f0;
+  --app-surface: #ffffff;
+  --app-background: #f4f7fb;
+  --app-primary: #2357c6;
+  --app-primary-dark: #1945a3;
+  --app-shadow: 0 12px 32px rgb(22 42 70 / 7%);
+}
+
+body {
+  min-height: 100vh;
+  background: var(--app-background);
+  color: var(--app-ink);
+  font-family: Inter, "Segoe UI", Arial, sans-serif;
+}
+
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: rgb(255 255 255 / 96%);
+  border-bottom: 1px solid var(--app-line);
+  backdrop-filter: blur(12px);
+}
+
+.app-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: .65rem;
+  color: var(--app-ink);
+  font-size: 1.05rem;
+  font-weight: 750;
+  letter-spacing: -.025em;
+}
+
+.app-brand:hover {
+  color: var(--app-primary);
+}
+
+.brand-mark {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  border-radius: .65rem;
+  background: var(--app-primary);
+  color: white;
+  font-size: .95rem;
+  font-weight: 800;
+}
+
+.app-nav {
+  align-items: center;
+  gap: .2rem;
+}
+
+.app-nav .nav-link {
+  padding: .55rem .75rem;
+  border-radius: .55rem;
+  color: #52647a;
+  font-size: .92rem;
+  font-weight: 600;
+}
+
+.app-nav .nav-link:hover,
+.app-nav .nav-link:focus {
+  background: #edf3ff;
+  color: var(--app-primary);
+}
+
+.account-menu {
+  display: flex;
+  align-items: center;
+  gap: .8rem;
+  margin-left: 1rem;
+}
+
+.account-name {
+  max-width: 13rem;
+  overflow: hidden;
+  color: var(--app-muted);
+  font-size: .9rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+}
+
+.app-main {
+  padding-top: 2rem;
+  padding-bottom: 4rem;
+}
+
+.app-main h1,
+.app-main h2,
+.app-main h3 {
+  color: var(--app-ink);
+  letter-spacing: -.025em;
+}
+
+.app-main .text-muted {
+  color: var(--app-muted) !important;
+}
+
+.app-main .card {
+  overflow: hidden;
+  border: 1px solid var(--app-line);
+  border-radius: .9rem;
+  background: var(--app-surface);
+  box-shadow: var(--app-shadow) !important;
+}
+
+.app-main .card-header {
+  padding: 1rem 1.25rem;
+  border-bottom-color: var(--app-line);
+  background: #fff;
+  font-weight: 700;
+}
+
+.app-main .card-body {
+  padding: 1.35rem;
+}
+
+.app-main .table {
+  color: var(--app-ink);
+}
+
+.app-main .table thead th {
+  padding-top: .9rem;
+  padding-bottom: .9rem;
+  border-bottom-color: var(--app-line);
+  color: var(--app-muted);
+  font-size: .76rem;
+  font-weight: 750;
+  letter-spacing: .055em;
+  text-transform: uppercase;
+}
+
+.app-main .table td {
+  padding-top: .85rem;
+  padding-bottom: .85rem;
+  border-color: #edf1f6;
+}
+
+.app-main .table a {
+  color: var(--app-primary);
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.app-main .table a:hover {
+  color: var(--app-primary-dark);
+  text-decoration: underline;
+}
+
+.app-main .form-label,
+.app-main label {
+  color: #40536b;
+  font-weight: 650;
+}
+
+.app-main form p {
+  margin-bottom: 1rem;
+}
+
+.app-main form p > label {
+  display: block;
+  margin-bottom: .4rem;
+}
+
+.app-main form p > input:not([type="checkbox"]):not([type="radio"]),
+.app-main form p > select,
+.app-main form p > textarea {
+  width: 100%;
+  min-height: 2.75rem;
+  padding: .55rem .75rem;
+  border: 1px solid #d7e0eb;
+  border-radius: .6rem;
+  background-color: #fff;
+}
+
+.app-main form p > textarea {
+  min-height: 7rem;
+}
+
+.app-main form p .helptext {
+  display: block;
+  margin-top: .35rem;
+  color: var(--app-muted);
+  font-size: .85rem;
+}
+
+.app-main form p .errorlist {
+  margin: .35rem 0 0;
+  padding-left: 1.25rem;
+  color: #b42318;
+}
+
+.app-main .form-control,
+.app-main .form-select {
+  min-height: 2.75rem;
+  border-color: #d7e0eb;
+  border-radius: .6rem;
+}
+
+.app-main textarea.form-control {
+  min-height: 7rem;
+}
+
+.app-main .form-control:focus,
+.app-main .form-select:focus {
+  border-color: #7fa3ef;
+  box-shadow: 0 0 0 .2rem rgb(35 87 198 / 12%);
+}
+
+.app-main .btn {
+  border-radius: .6rem;
+  font-weight: 650;
+}
+
+.app-main .btn-primary {
+  border-color: var(--app-primary);
+  background: var(--app-primary);
+}
+
+.app-main .btn-primary:hover {
+  border-color: var(--app-primary-dark);
+  background: var(--app-primary-dark);
+}
+
+.app-alert {
+  border: 0;
+  border-radius: .75rem;
+  box-shadow: var(--app-shadow);
+}
+
+.page-intro {
+  margin-bottom: 1.5rem;
+}
+
+.page-intro p {
+  max-width: 54rem;
+  margin-bottom: 0;
+  color: var(--app-muted);
+}
+
+.status-panel {
+  border: 1px solid var(--app-line);
+  border-radius: .9rem;
+  background: var(--app-surface);
+  box-shadow: var(--app-shadow);
+}
+
+.status-panel .form-control,
+.status-panel .form-select {
+  background-color: #fff;
+}
+
+.detail-list dt {
+  color: var(--app-muted);
+  font-size: .86rem;
+  font-weight: 650;
+}
+
+.detail-list dd {
+  margin-bottom: .9rem;
+}
+
+.navbar-toggler {
+  border-color: var(--app-line);
+}
+
+@media (max-width: 1199.98px) {
+  .app-nav {
+    align-items: stretch;
+    padding-top: .8rem;
+  }
+
+  .account-menu {
+    justify-content: space-between;
+    margin: .5rem 0 0;
+    padding: .8rem 0 0;
+    border-top: 1px solid var(--app-line);
+  }
+}
+
+@media (max-width: 575.98px) {
+  .app-main {
+    padding-top: 1.25rem;
+  }
+
+  .app-main .card-body {
+    padding: 1rem;
+  }
+}

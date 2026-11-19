@@ -1,6 +1,4 @@
 from datetime import date, timedelta
-from decimal import Decimal
-
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core import mail
@@ -19,22 +17,17 @@ from .models import (
     Equipment,
     MachinePart,
     Material,
-    MaterialStockMovement,
     PreventiveMaintenancePlan,
     PreventiveMaintenanceRecord,
     PreventiveMaintenanceReminder,
     WorkOrder,
     WorkOrderChangeRequest,
     WorkOrderDiaryEntry,
-    WorkOrderMaterialRequest,
 )
-from .roles import CHIEF, OPERATOR, STOREKEEPER, SUPERVISOR, TECHNICIAN
+from .roles import CHIEF, OPERATOR, SUPERVISOR, TECHNICIAN
 from .services import (
     assign_technicians,
-    create_material_request,
     create_work_order,
-    deliver_material_request,
-    receive_material_stock,
     resolve_change_request,
     submit_change_request,
     update_work_order_status,
@@ -51,7 +44,6 @@ class WorkOrderWorkflowTests(TestCase):
         cls.supervisor_group = Group.objects.create(name=SUPERVISOR)
         cls.operator_group = Group.objects.create(name=OPERATOR)
         cls.technician_group = Group.objects.create(name=TECHNICIAN)
-        cls.storekeeper_group = Group.objects.create(name=STOREKEEPER)
         cls.chief = User.objects.create_user(
             username="chief",
             password="test-password",
@@ -79,11 +71,6 @@ class WorkOrderWorkflowTests(TestCase):
             password="test",
         )
         cls.technical_staff.groups.add(cls.technician_group)
-        cls.storekeeper = User.objects.create_user(
-            username="storekeeper",
-            password="test",
-        )
-        cls.storekeeper.groups.add(cls.storekeeper_group)
         cls.equipment = Equipment.objects.create(name="Compresor")
         cls.other_equipment = Equipment.objects.create(name="Bomba")
         cls.part = MachinePart.objects.create(equipment=cls.equipment, name="Motor")
@@ -153,6 +140,12 @@ class WorkOrderWorkflowTests(TestCase):
                 actor=self.supervisor,
                 new_status=WorkOrder.Status.COMPLETED,
             )
+        with self.assertRaises(ValidationError):
+            update_work_order_status(
+                order=order,
+                actor=self.supervisor,
+                new_status=WorkOrder.Status.WAITING_MATERIALS,
+            )
 
         order = update_work_order_status(
             order=order,
@@ -189,267 +182,32 @@ class WorkOrderWorkflowTests(TestCase):
         order.refresh_from_db()
         self.assertEqual(order.status, WorkOrder.Status.IN_PROGRESS)
 
-    def test_material_receipt_is_independent_and_audited(self):
+    def test_removed_features_are_unavailable_and_legacy_data_is_preserved(self):
         order = self.create_order()
-        self.client.force_login(self.supervisor)
-
-        response = self.client.post(
-            reverse("work-order-materials-received", args=[order.pk])
-        )
-
-        self.assertEqual(response.status_code, 302)
-        order.refresh_from_db()
-        self.assertEqual(order.status, WorkOrder.Status.PREPARATION)
-        self.assertIsNotNone(order.materials_received_at)
-        self.assertEqual(order.materials_received_by, self.supervisor)
-        self.assertEqual(order.history.first().action, "Materiales recibidos")
-        self.assertEqual(
-            self.client.post(
-                reverse("work-order-materials-received", args=[order.pk])
-            ).status_code,
-            302,
-        )
-        self.assertEqual(order.history.count(), 2)
-
-    def test_supervisor_can_add_diary_entry_with_any_active_operator(self):
-        order = self.create_order()
-        other_operator = User.objects.create_user(username="other-operator", password="test")
-        other_operator.groups.add(self.technician_group)
-        self.client.force_login(self.supervisor)
-        entry_date = timezone.localdate().isoformat()
-
-        response = self.client.post(
-            reverse("work-order-diary-create", args=[order.pk]),
-            {
-                "entry_date": entry_date,
-                "description": "Se realizó limpieza del tablero.",
-                "operators": [other_operator.pk],
-            },
-        )
-
-        self.assertEqual(response.status_code, 302)
-        entry = WorkOrderDiaryEntry.objects.get(work_order=order)
-        self.assertEqual(entry.entry_date, timezone.localdate())
-        self.assertEqual(entry.description, "Se realizó limpieza del tablero.")
-        self.assertEqual(entry.created_by, self.supervisor)
-        self.assertQuerySetEqual(
-            entry.operators.all(),
-            [other_operator],
-            transform=lambda user: user,
-        )
-        self.assertEqual(order.history.first().action, "Trabajo agregado al diario")
-        self.assertContains(
-            self.client.get(reverse("work-order-detail", args=[order.pk])),
-            "Se realizó limpieza del tablero.",
-        )
-        pdf = self.client.get(reverse("work-order-pdf", args=[order.pk]))
-        self.assertEqual(pdf.status_code, 200)
-        self.assertTrue(pdf.content.startswith(b"%PDF"))
-
-    def test_chief_can_register_materials_and_diary_for_any_order(self):
-        order = self.create_order()
-        self.client.force_login(self.chief)
-        entry_date = timezone.localdate().isoformat()
-
-        materials_response = self.client.post(
-            reverse("work-order-materials-received", args=[order.pk])
-        )
-        diary_response = self.client.post(
-            reverse("work-order-diary-create", args=[order.pk]),
-            {
-                "entry_date": entry_date,
-                "description": "Se verificó la instalación.",
-                "operators": [self.technician.pk],
-            },
-        )
-
-        self.assertEqual(materials_response.status_code, 302)
-        self.assertEqual(diary_response.status_code, 302)
-        order.refresh_from_db()
-        self.assertEqual(order.materials_received_by, self.chief)
-        self.assertTrue(
-            order.diary_entries.filter(description="Se verificó la instalación.").exists()
-        )
-
-    def test_operator_cannot_change_status_or_record_materials_or_diary(self):
-        order = self.create_order()
-        assign_technicians(order=order, actor=self.supervisor, technicians=[self.technician])
-        self.client.force_login(self.technician)
-
-        status_response = self.client.post(
-            reverse("work-order-status", args=[order.pk]),
-            {"status": WorkOrder.Status.IN_PROGRESS},
-        )
-        materials_response = self.client.post(
-            reverse("work-order-materials-received", args=[order.pk])
-        )
-        diary_response = self.client.post(
-            reverse("work-order-diary-create", args=[order.pk]),
-            {
-                "entry_date": timezone.localdate().isoformat(),
-                "description": "Trabajo",
-                "operators": [self.technician.pk],
-            },
-        )
-
-        self.assertEqual(status_response.status_code, 403)
-        self.assertEqual(materials_response.status_code, 403)
-        self.assertEqual(diary_response.status_code, 403)
-        order.refresh_from_db()
-        self.assertEqual(order.status, WorkOrder.Status.PREPARATION)
-        self.assertIsNone(order.materials_received_at)
-        self.assertFalse(order.diary_entries.exists())
-
-    def test_assigned_operator_and_technician_can_request_materials(self):
-        order = self.create_order()
-        assign_technicians(
-            order=order,
-            actor=self.supervisor,
-            technicians=[self.technician, self.technical_staff],
-        )
         material = Material.objects.create(name="Cable", unit="m")
-
-        operator_request = create_material_request(
-            order=order,
-            actor=self.technician,
-            material=material,
-            quantity=Decimal("3"),
+        diary_entry = WorkOrderDiaryEntry.objects.create(
+            work_order=order,
+            entry_date=timezone.localdate(),
+            description="Registro histórico",
+            created_by=self.supervisor,
         )
-        technical_request = create_material_request(
-            order=order,
-            actor=self.technical_staff,
-            material=material,
-            quantity=Decimal("2"),
-        )
+        diary_entry.operators.add(self.technician)
+        self.client.force_login(self.chief)
 
-        self.assertEqual(operator_request.work_order, order)
-        self.assertEqual(operator_request.status, WorkOrderMaterialRequest.Status.PENDING)
-        self.assertEqual(technical_request.requested_by, self.technical_staff)
-
-    def test_assigned_operator_can_request_material_from_order_detail(self):
-        order = self.create_order()
-        assign_technicians(order=order, actor=self.supervisor, technicians=[self.technician])
-        material = Material.objects.create(name="Guantes", unit="par")
-        self.client.force_login(self.technician)
-
-        response = self.client.post(
-            reverse("work-order-material-request-create", args=[order.pk]),
-            {
-                "material": material.pk,
-                "requested_quantity": "2",
-                "notes": "Para el mantenimiento",
-            },
-        )
-
-        self.assertEqual(response.status_code, 302)
-        material_request = WorkOrderMaterialRequest.objects.get(work_order=order)
-        self.assertEqual(material_request.material, material)
-        self.assertEqual(material_request.requested_by, self.technician)
-        self.assertContains(
-            self.client.get(reverse("work-order-detail", args=[order.pk])),
-            "Pedidos de materiales",
-        )
-
-    def test_panolero_can_create_catalog_material(self):
-        self.client.force_login(self.storekeeper)
-
-        response = self.client.post(
-            reverse("materials-dashboard"),
-            {
-                "action": "create_material",
-                "name": "Junta",
-                "unit": "unidad",
-                "minimum_stock": "5",
-            },
-        )
-
-        self.assertEqual(response.status_code, 302)
-        material = Material.objects.get(name="Junta")
-        self.assertEqual(material.quantity_in_stock, Decimal("0"))
-        self.assertEqual(material.minimum_stock, Decimal("5"))
-
-    def test_panolero_records_receipt_and_partially_delivers_with_stock_history(self):
-        order = self.create_order()
-        material = Material.objects.create(name="Rodamiento", unit="unidad")
-        material_request = create_material_request(
-            order=order,
-            actor=self.supervisor,
-            material=material,
-            quantity=Decimal("4"),
-        )
-        self.client.force_login(self.storekeeper)
-
-        receipt_response = self.client.post(
-            reverse("materials-dashboard"),
-            {
-                "action": "receive_stock",
-                "material": material.pk,
-                "quantity": "10",
-                "notes": "Ingreso de proveedor",
-            },
-        )
-        delivery_response = self.client.post(
-            reverse("material-request-deliver", args=[material_request.pk]),
-            {"quantity": "2", "notes": "Primera entrega"},
-        )
-
-        self.assertEqual(receipt_response.status_code, 302)
-        self.assertEqual(delivery_response.status_code, 302)
-        material.refresh_from_db()
-        material_request.refresh_from_db()
-        self.assertEqual(material.quantity_in_stock, Decimal("8.000"))
-        self.assertEqual(material_request.delivered_quantity, Decimal("2.000"))
-        self.assertEqual(material_request.status, WorkOrderMaterialRequest.Status.PARTIAL)
+        self.assertEqual(self.client.get("/materiales/").status_code, 404)
         self.assertEqual(
-            list(
-                MaterialStockMovement.objects.order_by("kind").values_list(
-                    "kind", "quantity", "work_order_id"
-                )
-            ),
-            [
-                (MaterialStockMovement.Kind.DELIVERY, Decimal("2.000"), order.pk),
-                (MaterialStockMovement.Kind.RECEIPT, Decimal("10.000"), None),
-            ],
+            self.client.post(f"/ordenes/{order.pk}/diario/nuevo/").status_code,
+            404,
         )
-
-    def test_delivery_cannot_exceed_requested_quantity_or_stock(self):
-        order = self.create_order()
-        material = Material.objects.create(
-            name="Grasa",
-            unit="kg",
-            quantity_in_stock=Decimal("2"),
+        detail = self.client.get(reverse("work-order-detail", args=[order.pk]))
+        self.assertNotContains(detail, "Pedidos de materiales")
+        self.assertNotContains(detail, "Diario de trabajo")
+        self.assertTrue(Material.objects.filter(pk=material.pk).exists())
+        self.assertTrue(WorkOrderDiaryEntry.objects.filter(pk=diary_entry.pk).exists())
+        self.assertEqual(
+            self.client.get(reverse("work-order-pdf", args=[order.pk])).status_code,
+            200,
         )
-        material_request = create_material_request(
-            order=order,
-            actor=self.supervisor,
-            material=material,
-            quantity=Decimal("3"),
-        )
-
-        with self.assertRaises(ValidationError):
-            deliver_material_request(
-                request=material_request,
-                actor=self.storekeeper,
-                quantity=Decimal("3"),
-            )
-        material.refresh_from_db()
-        material_request.refresh_from_db()
-        self.assertEqual(material.quantity_in_stock, Decimal("2.000"))
-        self.assertEqual(material_request.delivered_quantity, Decimal("0.000"))
-        self.assertFalse(MaterialStockMovement.objects.exists())
-
-    def test_only_panolero_or_chief_can_manage_stock(self):
-        material = Material.objects.create(name="Filtro", unit="unidad")
-
-        with self.assertRaises(PermissionDenied):
-            receive_material_stock(
-                actor=self.supervisor,
-                material=material,
-                quantity=Decimal("1"),
-            )
-
-        self.client.force_login(self.storekeeper)
-        self.assertEqual(self.client.get(reverse("materials-dashboard")).status_code, 200)
 
     def test_supervisor_can_assign_technicians_directly_and_assignment_is_audited(self):
         order = self.create_order()
@@ -691,7 +449,6 @@ class WorkOrderWorkflowTests(TestCase):
             ("new-supervisor", SUPERVISOR),
             ("new-operator", OPERATOR),
             ("new-technician", TECHNICIAN),
-            ("new-storekeeper", STOREKEEPER),
         ):
             with self.subTest(role=role):
                 response = self.client.post(

@@ -1,10 +1,11 @@
 {% extends "planner/base.html" %}
 {% block title %}Mantenimiento preventivo{% endblock %}
 {% block content %}
-<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+<div class="page-intro d-flex flex-wrap justify-content-between align-items-end gap-3">
   <div>
-    <h1 class="h3 mb-1">Mantenimiento preventivo</h1>
-    <p class="text-muted mb-0">Los avisos se envían por correo y se registran para evitar duplicados.</p>
+    <span class="text-uppercase small fw-bold text-primary">Planificación</span>
+    <h1 class="h2 mt-1 mb-2">Mantenimiento preventivo</h1>
+    <p>Consulta los planes y registra las tareas realizadas.</p>
   </div>
   {% if user.is_superuser %}
     <a class="btn btn-primary" href="{% url 'preventive-plan-create' %}">Nuevo plan</a>
@@ -19,7 +20,7 @@
 <div class="row g-3">
   {% for plan in plans %}
     <div class="col-12">
-      <section class="card shadow-sm">
+      <section class="card">
         <div class="card-body">
           <div class="d-flex flex-wrap justify-content-between gap-2">
             <div>

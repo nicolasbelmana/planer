@@ -6,15 +6,12 @@ from .models import (
     AssetType,
     Equipment,
     MachinePart,
-    Material,
-    MaterialStockMovement,
     PreventiveMaintenancePlan,
     PreventiveMaintenanceRecord,
     PreventiveMaintenanceReminder,
     WorkOrder,
     WorkOrderChangeRequest,
     WorkOrderHistory,
-    WorkOrderMaterialRequest,
 )
 
 
@@ -50,49 +47,6 @@ class MachinePartAdmin(admin.ModelAdmin):
     list_display = ("name", "equipment")
     list_filter = ("equipment",)
     search_fields = ("name", "equipment__name")
-
-
-@admin.register(Material)
-class MaterialAdmin(admin.ModelAdmin):
-    list_display = ("name", "unit", "quantity_in_stock", "minimum_stock")
-    search_fields = ("name",)
-
-
-@admin.register(WorkOrderMaterialRequest)
-class WorkOrderMaterialRequestAdmin(admin.ModelAdmin):
-    list_display = (
-        "work_order",
-        "material",
-        "requested_quantity",
-        "delivered_quantity",
-        "status",
-        "requested_by",
-    )
-    list_filter = ("status",)
-    search_fields = ("work_order__title", "material__name", "requested_by__username")
-
-
-@admin.register(MaterialStockMovement)
-class MaterialStockMovementAdmin(admin.ModelAdmin):
-    list_display = ("created_at", "kind", "material", "quantity", "work_order", "actor")
-    list_filter = ("kind",)
-    search_fields = ("material__name", "actor__username", "work_order__title")
-    readonly_fields = (
-        "material",
-        "kind",
-        "quantity",
-        "work_order",
-        "request",
-        "notes",
-        "actor",
-        "created_at",
-    )
-
-    def has_add_permission(self, request):
-        return False
-
-    def has_delete_permission(self, request, obj=None):
-        return False
 
 
 class WorkOrderHistoryInline(admin.TabularInline):

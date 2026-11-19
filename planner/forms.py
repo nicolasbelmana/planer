@@ -3,19 +3,17 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.models import Group
 from django.core.exceptions import ValidationError
-from django.utils import timezone
 
-from .models import Equipment, MachinePart, Material, WorkOrder, WorkOrderMaterialRequest
+from .models import Equipment, MachinePart, WorkOrder
 from .models import (
     Asset,
     AssetConnection,
     AssetType,
     PreventiveMaintenancePlan,
     PreventiveMaintenanceRecord,
-    WorkOrderDiaryEntry,
 )
 from .roles import (
-    ROLE_NAMES,
+    ASSIGNABLE_ROLE_NAMES,
     SUPERVISOR,
     WORK_ORDER_STAFF_ROLES,
 )
@@ -23,7 +21,10 @@ from .services import STATUS_TRANSITIONS
 
 
 class StaffUserCreationForm(UserCreationForm):
-    role = forms.ChoiceField(label="Rol", choices=[(role, role) for role in ROLE_NAMES])
+    role = forms.ChoiceField(
+        label="Rol",
+        choices=[(role, role) for role in ASSIGNABLE_ROLE_NAMES],
+    )
 
     class Meta(UserCreationForm.Meta):
         model = get_user_model()
@@ -308,49 +309,6 @@ class StatusUpdateForm(forms.Form):
             self.fields["status"].disabled = True
 
 
-class WorkOrderDiaryEntryForm(forms.ModelForm):
-    class Meta:
-        model = WorkOrderDiaryEntry
-        fields = ("entry_date", "description", "operators")
-        labels = {
-            "entry_date": "Fecha del trabajo",
-            "description": "Trabajo realizado",
-            "operators": "Operarios y técnicos que realizaron la tarea",
-        }
-        widgets = {
-            "entry_date": forms.DateInput(attrs={"type": "date"}),
-            "description": forms.Textarea(
-                attrs={
-                    "rows": 3,
-                    "placeholder": "Ej.: Se realizó limpieza del tablero de bombas.",
-                }
-            ),
-            "operators": forms.SelectMultiple(attrs={"size": 6}),
-        }
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields["entry_date"].initial = timezone.localdate()
-        self.fields["operators"].queryset = (
-            get_user_model()
-            .objects.filter(
-                groups__name__in=WORK_ORDER_STAFF_ROLES,
-                is_active=True,
-            )
-            .distinct()
-            .order_by("username")
-        )
-        self.fields["operators"].help_text = (
-            "Puedes seleccionar cualquier operario o técnico activo."
-        )
-
-    def clean_entry_date(self):
-        entry_date = self.cleaned_data["entry_date"]
-        if entry_date > timezone.localdate():
-            raise ValidationError("La fecha del trabajo no puede estar en el futuro.")
-        return entry_date
-
-
 class TechnicianAssignmentForm(forms.Form):
     technicians = forms.ModelMultipleChoiceField(
         queryset=get_user_model().objects.none(),
@@ -368,97 +326,6 @@ class TechnicianAssignmentForm(forms.Form):
             .distinct()
             .order_by("username")
         )
-
-
-class MaterialCatalogForm(forms.ModelForm):
-    minimum_stock = forms.DecimalField(
-        label="Avisar cuando el stock llegue a",
-        min_value=0,
-        max_digits=12,
-        decimal_places=3,
-        widget=forms.NumberInput(attrs={"min": "0", "step": "0.001"}),
-    )
-
-    class Meta:
-        model = Material
-        fields = ("name", "unit", "minimum_stock")
-        labels = {
-            "name": "Material",
-            "unit": "Unidad (unidad, kg, m, L, etc.)",
-            "minimum_stock": "Avisar cuando el stock llegue a",
-        }
-        widgets = {
-            "minimum_stock": forms.NumberInput(attrs={"min": "0", "step": "0.001"}),
-        }
-
-
-class MaterialStockReceiptForm(forms.Form):
-    material = forms.ModelChoiceField(
-        queryset=Material.objects.none(),
-        label="Material",
-    )
-    quantity = forms.DecimalField(
-        label="Cantidad recibida",
-        min_value=0.001,
-        max_digits=12,
-        decimal_places=3,
-        widget=forms.NumberInput(attrs={"min": "0.001", "step": "0.001"}),
-    )
-    notes = forms.CharField(
-        label="Detalle del ingreso",
-        required=False,
-        max_length=2000,
-        widget=forms.Textarea(attrs={"rows": 2}),
-    )
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields["material"].queryset = Material.objects.order_by("name")
-
-
-class WorkOrderMaterialRequestForm(forms.ModelForm):
-    requested_quantity = forms.DecimalField(
-        label="Cantidad",
-        min_value=0.001,
-        max_digits=12,
-        decimal_places=3,
-        widget=forms.NumberInput(attrs={"min": "0.001", "step": "0.001"}),
-    )
-
-    class Meta:
-        model = WorkOrderMaterialRequest
-        fields = ("material", "requested_quantity", "notes")
-        labels = {
-            "material": "Material solicitado",
-            "requested_quantity": "Cantidad",
-            "notes": "Detalle / uso previsto",
-        }
-        widgets = {
-            "requested_quantity": forms.NumberInput(
-                attrs={"min": "0.001", "step": "0.001"}
-            ),
-            "notes": forms.Textarea(attrs={"rows": 2}),
-        }
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields["material"].queryset = Material.objects.order_by("name")
-
-
-class MaterialDeliveryForm(forms.Form):
-    quantity = forms.DecimalField(
-        label="Cantidad a entregar",
-        min_value=0.001,
-        max_digits=12,
-        decimal_places=3,
-        widget=forms.NumberInput(attrs={"min": "0.001", "step": "0.001"}),
-    )
-    notes = forms.CharField(
-        label="Detalle de entrega",
-        required=False,
-        max_length=2000,
-        widget=forms.Textarea(attrs={"rows": 2}),
-    )
 
 
 class ChangeRequestForm(forms.Form):

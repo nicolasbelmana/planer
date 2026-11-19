@@ -1,194 +1,121 @@
 {% extends "planner/base.html" %}
-{% block title %}OT-{{ order.pk }} · Maintenance Planner{% endblock %}
+{% block title %}OT-{{ order.pk }} · Mantenimiento{% endblock %}
 {% block content %}
-<div class="d-flex justify-content-between align-items-start mb-3">
+<div class="page-intro d-flex flex-wrap justify-content-between align-items-start gap-3">
   <div>
-    <a href="{% url 'dashboard' %}" class="text-decoration-none">&larr; Volver a órdenes</a>
-    <h1 class="h3 mt-2">OT-{{ order.pk }} · {{ order.title }}</h1>
+    <a href="{% url 'dashboard' %}" class="small text-decoration-none">&larr; Volver a órdenes</a>
+    <div class="d-flex flex-wrap align-items-center gap-2 mt-2">
+      <span class="text-uppercase small fw-bold text-primary">OT-{{ order.pk }}</span>
+      <span class="badge text-bg-secondary">{{ order.get_status_display }}</span>
+      {% if order.is_overdue %}<span class="badge text-bg-danger">Vencida</span>{% endif %}
+    </div>
+    <h1 class="h2 mt-2 mb-0">{{ order.title }}</h1>
   </div>
-  <div>
-    <span class="badge text-bg-secondary fs-6">{{ order.get_status_display }}</span>
-    {% if order.is_overdue %}<span class="badge text-bg-danger fs-6">Vencida</span>{% endif %}
-    <a class="btn btn-outline-danger ms-2" href="{% url 'work-order-pdf' order.pk %}">Descargar PDF</a>
-  </div>
+  <a class="btn btn-outline-primary" href="{% url 'work-order-pdf' order.pk %}">Descargar orden PDF</a>
 </div>
-<div class="row g-3">
-  <div class="col-lg-7">
-    <section class="card shadow-sm mb-3">
+
+<div class="row g-4">
+  <div class="col-xl-8">
+    <section class="card mb-4">
+      <div class="card-header">Resumen de la orden</div>
       <div class="card-body">
-        <h2 class="h5">Detalles</h2>
-        <dl class="row mb-0">
-          <dt class="col-sm-4">Equipo legado</dt><dd class="col-sm-8">{{ order.equipment|default:"—" }}</dd>
-          <dt class="col-sm-4">Parte legado</dt><dd class="col-sm-8">{{ order.machine_part|default:"—" }}</dd>
-          <dt class="col-sm-4">Activos</dt>
+        <dl class="row detail-list mb-0">
+          <dt class="col-sm-4">Equipo</dt>
+          <dd class="col-sm-8">{{ order.equipment|default:"—" }}</dd>
+          <dt class="col-sm-4">Parte</dt>
+          <dd class="col-sm-8">{{ order.machine_part|default:"—" }}</dd>
+          <dt class="col-sm-4">Activos relacionados</dt>
           <dd class="col-sm-8">
             {% for asset in linked_assets %}
               {% if can_view_assets %}<a href="{% url 'asset-detail' asset.pk %}">{{ asset.name }}</a>{% else %}{{ asset.name }}{% endif %}
               <span class="text-muted">({{ asset.asset_type.name }})</span>{% if not forloop.last %}, {% endif %}
             {% empty %}—{% endfor %}
           </dd>
-          <dt class="col-sm-4">Descripción</dt><dd class="col-sm-8">{{ order.description|default:"—"|linebreaksbr }}</dd>
-          <dt class="col-sm-4">Inicio</dt><dd class="col-sm-8">{{ order.start_date|date:"d/m/Y" }}</dd>
-          <dt class="col-sm-4">Duración</dt><dd class="col-sm-8">{{ order.estimated_days }} días corridos</dd>
-          <dt class="col-sm-4">Fecha límite</dt><dd class="col-sm-8">{{ order.due_date|date:"d/m/Y" }}</dd>
-          <dt class="col-sm-4">Materiales</dt>
-          <dd class="col-sm-8">
-            {% if order.materials_received_at %}
-              Recibidos el {{ order.materials_received_at|date:"d/m/Y H:i" }}
-              por {{ order.materials_received_by.get_username }}
-            {% else %}
-              Pendientes de recepción
-            {% endif %}
-          </dd>
-          <dt class="col-sm-4">Supervisores</dt>
+          <dt class="col-sm-4">Descripción</dt>
+          <dd class="col-sm-8">{{ order.description|default:"—"|linebreaksbr }}</dd>
+          <dt class="col-sm-4">Fecha de inicio</dt>
+          <dd class="col-sm-8">{{ order.start_date|date:"d/m/Y" }}</dd>
+          <dt class="col-sm-4">Duración estimada</dt>
+          <dd class="col-sm-8">{{ order.estimated_days }} días corridos</dd>
+          <dt class="col-sm-4">Fecha límite</dt>
+          <dd class="col-sm-8">{{ order.due_date|date:"d/m/Y" }}</dd>
+          <dt class="col-sm-4">Supervisión</dt>
           <dd class="col-sm-8">{% for person in order.supervisors.all %}{{ person.get_username }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}</dd>
           <dt class="col-sm-4">Operarios y técnicos</dt>
           <dd class="col-sm-8">{% for person in order.technicians.all %}{{ person.get_username }}{% if not forloop.last %}, {% endif %}{% empty %}Sin asignar{% endfor %}</dd>
         </dl>
       </div>
     </section>
-    {% if can_update_progress %}
-      <div class="row g-3">
-        <div class="col-md-6">
-          <section class="card shadow-sm h-100">
-            <div class="card-body">
-              <h2 class="h5">Actualizar estado</h2>
-              <form method="post" action="{% url 'work-order-status' order.pk %}">
-                {% csrf_token %}{{ status_form.as_p }}
-                <button class="btn btn-primary" type="submit" {% if status_form.fields.status.disabled %}disabled{% endif %}>Guardar estado</button>
-              </form>
-            </div>
-          </section>
-        </div>
-        <div class="col-md-6">
-          <section class="card shadow-sm h-100">
-            <div class="card-body">
-              <h2 class="h5">Recepción de materiales</h2>
-              {% if order.materials_received_at %}
-                <p class="mb-0">Recepción confirmada por {{ order.materials_received_by.get_username }} el {{ order.materials_received_at|date:"d/m/Y H:i" }}.</p>
-              {% else %}
-                <p class="text-muted">Este registro no modifica el estado de la orden.</p>
-                <form method="post" action="{% url 'work-order-materials-received' order.pk %}">
+
+    {% if can_update_progress or can_assign_operators %}
+      <div class="row g-4">
+        {% if can_update_progress %}
+          <div class="col-md-6">
+            <section class="card h-100">
+              <div class="card-header">Actualizar estado</div>
+              <div class="card-body">
+                <form method="post" action="{% url 'work-order-status' order.pk %}">
                   {% csrf_token %}
-                  <button class="btn btn-primary" type="submit">Marcar materiales recibidos</button>
+                  {{ status_form.as_p }}
+                  <button class="btn btn-primary" type="submit" {% if status_form.fields.status.disabled %}disabled{% endif %}>Guardar estado</button>
                 </form>
-              {% endif %}
-            </div>
-          </section>
-        </div>
-      </div>
-      <section class="card shadow-sm mt-3">
-        <div class="card-body">
-          <h2 class="h5">Agregar al diario de trabajo</h2>
-          <form method="post" action="{% url 'work-order-diary-create' order.pk %}">
-            {% csrf_token %}
-            {{ diary_form.as_p }}
-            <button class="btn btn-primary" type="submit">Guardar registro</button>
-          </form>
-        </div>
-      </section>
-    {% endif %}
-    {% if can_assign_operators %}
-      <div class="row g-3 mt-1">
-        <div class="col-md-6">
-          <section class="card shadow-sm h-100">
-            <div class="card-body">
-              <h2 class="h5">Asignar operarios y técnicos</h2>
-              <form method="post" action="{% url 'work-order-technicians' order.pk %}">
-                {% csrf_token %}{{ technician_form.as_p }}
-                <button class="btn btn-primary" type="submit">Guardar asignación</button>
-              </form>
-            </div>
-          </section>
-        </div>
+              </div>
+            </section>
+          </div>
+        {% endif %}
+        {% if can_assign_operators %}
+          <div class="col-md-6">
+            <section class="card h-100">
+              <div class="card-header">Asignar personal</div>
+              <div class="card-body">
+                <form method="post" action="{% url 'work-order-technicians' order.pk %}">
+                  {% csrf_token %}
+                  {{ technician_form.as_p }}
+                  <button class="btn btn-primary" type="submit">Guardar asignación</button>
+                </form>
+              </div>
+            </section>
+          </div>
+        {% endif %}
       </div>
     {% endif %}
     {% if can_request_change %}
-      <a class="btn btn-outline-primary mt-3" href="{% url 'work-order-change-request' order.pk %}">Solicitar cambio sujeto a aprobación</a>
+      <a class="btn btn-outline-primary mt-4" href="{% url 'work-order-change-request' order.pk %}">Solicitar cambio de la orden</a>
     {% endif %}
-    <section class="card shadow-sm mt-3">
-      <div class="card-body">
-        <div class="d-flex justify-content-between align-items-center">
-          <h2 class="h5 mb-0">Pedidos de materiales</h2>
-          <a href="{% url 'materials-dashboard' %}">Ver pañol y stock</a>
-        </div>
-        {% if can_request_materials %}
-          <form method="post" action="{% url 'work-order-material-request-create' order.pk %}" class="mt-3">
-            {% csrf_token %}
-            {{ material_request_form.as_p }}
-            <button class="btn btn-primary" type="submit">Solicitar material para esta orden</button>
-          </form>
-        {% endif %}
-        <div class="table-responsive mt-3">
-          <table class="table table-sm align-middle">
-            <thead><tr><th>Material</th><th>Solicitado</th><th>Entregado</th><th>Estado</th><th>Solicitó</th></tr></thead>
-            <tbody>
-              {% for item in order.material_requests.all %}
-                <tr>
-                  <td>{{ item.material.name }} ({{ item.material.unit }})</td>
-                  <td>{{ item.requested_quantity }}</td>
-                  <td>{{ item.delivered_quantity }}</td>
-                  <td>{{ item.get_status_display }}</td>
-                  <td>{{ item.requested_by.get_username }}</td>
-                </tr>
-                {% if item.notes %}<tr><td class="text-muted small" colspan="5">{{ item.notes }}</td></tr>{% endif %}
-              {% empty %}
-                <tr><td colspan="5" class="text-muted">No hay pedidos de materiales asociados.</td></tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </section>
   </div>
-  <div class="col-lg-5">
-    <section class="card shadow-sm mb-3">
+
+  <aside class="col-xl-4">
+    <section class="card mb-4">
+      <div class="card-header">Historial</div>
       <div class="card-body">
-        <h2 class="h5">Diario de trabajo</h2>
-        {% for entry in order.diary_entries.all %}
-          <article class="border-bottom py-2">
-            <div><strong>{{ entry.entry_date|date:"d/m/Y" }}</strong> · {{ entry.description|linebreaksbr }}</div>
-            <div class="small text-muted">
-              Participantes:
-              {% for operator in entry.operators.all %}{{ operator.get_username }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}
-              <br>Registrado por {{ entry.created_by.get_username }} el {{ entry.created_at|date:"d/m/Y H:i" }}
-            </div>
+        {% for entry in order.history.all %}
+          <article class="border-bottom py-3">
+            <strong>{{ entry.action }}</strong>
+            <div class="small text-muted mt-1">{{ entry.actor.get_username }} · {{ entry.created_at|date:"d/m/Y H:i" }}</div>
+            {% if entry.new_values %}<div class="small mt-1">{{ entry.new_values }}</div>{% endif %}
           </article>
         {% empty %}
-          <p class="text-muted mb-0">Todavía no hay trabajos registrados.</p>
+          <p class="text-muted mb-0">Todavía no hay cambios registrados.</p>
         {% endfor %}
       </div>
     </section>
-    <section class="card shadow-sm">
+    <section class="card">
+      <div class="card-header">Solicitudes de cambio</div>
       <div class="card-body">
-        <h2 class="h5">Historial</h2>
-        <ul class="list-group list-group-flush">
-          {% for entry in order.history.all %}
-            <li class="list-group-item px-0">
-              <strong>{{ entry.action }}</strong>
-              <div class="small text-muted">{{ entry.actor.get_username }} · {{ entry.created_at|date:"d/m/Y H:i" }}</div>
-              {% if entry.new_values %}<div class="small">{{ entry.new_values }}</div>{% endif %}
-            </li>
-          {% empty %}
-            <li class="list-group-item px-0 text-muted">Sin cambios registrados.</li>
-          {% endfor %}
-        </ul>
-      </div>
-    </section>
-    <section class="card shadow-sm mt-3">
-      <div class="card-body">
-        <h2 class="h5">Solicitudes de cambio</h2>
         {% for change in order.change_requests.all %}
-          <div class="border-bottom py-2">
-            <div><strong>{{ change.get_status_display }}</strong> · {{ change.created_at|date:"d/m/Y H:i" }}</div>
-            <div class="small">{{ change.reason }}</div>
-            {% if change.resolution_comment %}<div class="small text-muted">{{ change.resolution_comment }}</div>{% endif %}
-          </div>
+          <article class="border-bottom py-3">
+            <div class="d-flex justify-content-between gap-2">
+              <strong>{{ change.get_status_display }}</strong>
+              <span class="small text-muted">{{ change.created_at|date:"d/m/Y H:i" }}</span>
+            </div>
+            <div class="small mt-2">{{ change.reason }}</div>
+            {% if change.resolution_comment %}<div class="small text-muted mt-1">{{ change.resolution_comment }}</div>{% endif %}
+          </article>
         {% empty %}
-          <p class="text-muted mb-0">No hay solicitudes.</p>
+          <p class="text-muted mb-0">No hay solicitudes para esta orden.</p>
         {% endfor %}
       </div>
     </section>
-  </div>
+  </aside>
 </div>
 {% endblock %}

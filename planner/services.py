@@ -14,21 +14,16 @@ from .models import (
     Asset,
     Equipment,
     MachinePart,
-    Material,
-    MaterialStockMovement,
     WorkOrder,
     WorkOrderChangeRequest,
-    WorkOrderDiaryEntry,
     WorkOrderHistory,
-    WorkOrderMaterialRequest,
 )
-from .roles import CHIEF, STOREKEEPER, SUPERVISOR, WORK_ORDER_STAFF_ROLES, has_role
+from .roles import CHIEF, SUPERVISOR, WORK_ORDER_STAFF_ROLES, has_role
 
 logger = logging.getLogger(__name__)
 
 STATUS_TRANSITIONS = {
     WorkOrder.Status.PREPARATION: {
-        WorkOrder.Status.WAITING_MATERIALS,
         WorkOrder.Status.IN_PROGRESS,
     },
     WorkOrder.Status.WAITING_MATERIALS: {WorkOrder.Status.IN_PROGRESS},
@@ -104,97 +99,6 @@ def _require_work_order_manager(user, order):
         )
 
 
-def can_manage_material_stock(user):
-    return has_role(user, CHIEF) or has_role(user, STOREKEEPER)
-
-
-def can_request_work_order_materials(user, order):
-    return has_role(user, CHIEF) or (
-        order.supervisors.filter(pk=user.pk).exists()
-        or order.technicians.filter(pk=user.pk).exists()
-    )
-
-
-def receive_material_stock(*, actor, material, quantity, notes=""):
-    if not can_manage_material_stock(actor):
-        raise PermissionDenied("Solo el jefe o un pañolero puede ingresar stock.")
-    if quantity <= 0:
-        raise ValidationError("La cantidad recibida debe ser mayor que cero.")
-    with transaction.atomic():
-        locked_material = Material.objects.select_for_update().get(pk=material.pk)
-        locked_material.quantity_in_stock += quantity
-        locked_material.save(update_fields=["quantity_in_stock"])
-        movement = MaterialStockMovement.objects.create(
-            material=locked_material,
-            kind=MaterialStockMovement.Kind.RECEIPT,
-            quantity=quantity,
-            notes=notes.strip(),
-            actor=actor,
-        )
-    return movement
-
-
-def create_material_request(*, order, actor, material, quantity, notes=""):
-    if not can_request_work_order_materials(actor, order):
-        raise PermissionDenied(
-            "Solo el jefe o personal asignado a esta orden puede pedir materiales."
-        )
-    if quantity <= 0:
-        raise ValidationError("La cantidad solicitada debe ser mayor que cero.")
-    if not material.pk:
-        raise ValidationError("Selecciona un material válido.")
-    return WorkOrderMaterialRequest.objects.create(
-        work_order=order,
-        material=material,
-        requested_quantity=quantity,
-        notes=notes.strip(),
-        requested_by=actor,
-    )
-
-
-def deliver_material_request(*, request, actor, quantity, notes=""):
-    if not can_manage_material_stock(actor):
-        raise PermissionDenied("Solo el jefe o un pañolero puede entregar materiales.")
-    if quantity <= 0:
-        raise ValidationError("La cantidad a entregar debe ser mayor que cero.")
-    with transaction.atomic():
-        locked_request = (
-            WorkOrderMaterialRequest.objects.select_for_update()
-            .select_related("material")
-            .get(pk=request.pk)
-        )
-        if locked_request.status == WorkOrderMaterialRequest.Status.FULFILLED:
-            raise ValidationError("Este pedido ya fue entregado por completo.")
-        if quantity > locked_request.remaining_quantity:
-            raise ValidationError("La cantidad supera lo que falta entregar.")
-        material = Material.objects.select_for_update().get(
-            pk=locked_request.material_id
-        )
-        if quantity > material.quantity_in_stock:
-            raise ValidationError("No hay stock suficiente para esa entrega.")
-        material.quantity_in_stock -= quantity
-        material.save(update_fields=["quantity_in_stock"])
-        locked_request.delivered_quantity += quantity
-        locked_request.status = (
-            WorkOrderMaterialRequest.Status.FULFILLED
-            if locked_request.delivered_quantity == locked_request.requested_quantity
-            else WorkOrderMaterialRequest.Status.PARTIAL
-        )
-        locked_request.save(
-            update_fields=["delivered_quantity", "status", "updated_at"]
-        )
-        movement = MaterialStockMovement.objects.create(
-            material=material,
-            kind=MaterialStockMovement.Kind.DELIVERY,
-            quantity=quantity,
-            work_order=locked_request.work_order,
-            request=locked_request,
-            notes=notes.strip(),
-            actor=actor,
-        )
-    return movement
-
-
 def create_work_order(*, actor, values):
     if not has_role(actor, CHIEF):
         raise PermissionDenied("Solo el jefe puede crear órdenes.")
@@ -248,86 +152,6 @@ def update_work_order_status(*, order, actor, new_status):
             f"La orden {locked} cambió de {old_status} a {new_status}.",
         )
     return locked
-
-
-def mark_materials_received(*, order, actor):
-    _require_work_order_manager(actor, order)
-    with transaction.atomic():
-        locked = WorkOrder.objects.select_for_update().get(pk=order.pk)
-        _require_work_order_manager(actor, locked)
-        if locked.materials_received_at is not None:
-            raise ValidationError("La recepción de materiales ya fue registrada.")
-        old_values = {"materials_received": False}
-        locked.materials_received_at = timezone.now()
-        locked.materials_received_by = actor
-        locked.save(
-            update_fields=[
-                "materials_received_at",
-                "materials_received_by",
-                "updated_at",
-            ]
-        )
-        _record_history(
-            locked,
-            actor,
-            "Materiales recibidos",
-            old_values=old_values,
-            new_values={
-                "materials_received": True,
-                "received_by": actor.get_username(),
-                "received_at": locked.materials_received_at.isoformat(),
-            },
-        )
-        _notify_order(
-            locked,
-            f"Materiales recibidos: {locked.title}",
-            f"{actor.get_username()} confirmó la recepción de materiales para {locked}.",
-        )
-    return locked
-
-
-def create_diary_entry(*, order, actor, entry_date, description, operators):
-    _require_work_order_manager(actor, order)
-    if entry_date > timezone.localdate():
-        raise ValidationError("La fecha del trabajo no puede estar en el futuro.")
-    if not description.strip():
-        raise ValidationError("Describe el trabajo realizado.")
-    if not operators:
-        raise ValidationError("Selecciona al menos un operario participante.")
-    invalid_operators = [
-        operator
-        for operator in operators
-        if not operator.is_active
-        or not any(has_role(operator, role) for role in WORK_ORDER_STAFF_ROLES)
-    ]
-    if invalid_operators:
-        raise ValidationError(
-            "Todos los participantes deben ser Operarios o Técnicos activos."
-        )
-    with transaction.atomic():
-        locked = WorkOrder.objects.select_for_update().get(pk=order.pk)
-        _require_work_order_manager(actor, locked)
-        entry = WorkOrderDiaryEntry.objects.create(
-            work_order=locked,
-            entry_date=entry_date,
-            description=description.strip(),
-            created_by=actor,
-        )
-        entry.operators.set(operators)
-        _record_history(
-            locked,
-            actor,
-            "Trabajo agregado al diario",
-            new_values={
-                "diary_entry_id": entry.pk,
-                "entry_date": entry.entry_date.isoformat(),
-                "description": entry.description,
-                "operators": sorted(
-                    operator.get_username() for operator in operators
-                ),
-            },
-        )
-    return entry
 
 
 def assign_technicians(*, order, actor, technicians):
